@@ -30,4 +30,7 @@ To update the file on github, so other group members can see your changes:
 2. navigate to the project folder and 
 3. execute `git add [filename]`, replacing `[filename]` with the file that you gave edited (do this for every edited file). You can also execute `git add *` if you want to add all files that you have changed or created.
 5. execute `git commit -m "[message]"` replacing `[message]` with a short description of what you have changed or added
-6. execute `git push`
+6. execute `git pull` to also include changes made by others. 
+7. execute `git push`
+
+###**Always do `git pull` when you start working and right after a `git commit` before you do `git push`!**
