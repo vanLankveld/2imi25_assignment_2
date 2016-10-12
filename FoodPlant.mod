@@ -1,7 +1,95 @@
 using CP;
 
 //Input data
+tuple Product {
+	key int productId;
+	string name;
+}
 
+tuple Demand {
+	key string demandId;
+	int productId;
+	int quantityl;
+	int deliveryMin;
+	int deliveryMax;
+	float nonDeliveryVariableCost;
+	int dueTime;
+	float tardinessVariableCost;
+	
+}
+
+tuple Resource {
+	key string resourceId;
+	int resourceNr;
+	string setupMatrixId;
+	int initialProductId;
+}
+
+tuple SetupResource {
+	key string setupResourceId;
+}
+
+tuple StorageTank {
+	key string storageTankId;
+	string name;
+	int quantityMax;
+	string setupMatrixId;
+	int initialProductId;
+}
+
+tuple Step {
+	key string stepId;
+	int productId;
+	string setupResourceId;
+}
+
+tuple Precedence {
+	string predecessorId;
+	string successorId;
+	int delayMin;
+	int delayMax;
+}
+
+tuple Alternative {
+	key string stepId;
+	key int alternativeNumber;
+	string resourceId;
+	int fixedProcessingTime;
+	float variableProcessingTime;
+	int fixedProcessingCost;
+	float variableProcessingCost;
+}
+
+tuple StorageProduction {
+	key string prodStepId;
+	key string storageTankId;
+	string consStepId;
+}
+
+tuple Setup {
+	key string setupMatrixId;
+	key int fromState;
+	key int toState;
+	int setupTime;
+	int setupCost;
+}
+
+tuple CriterionWeight {
+	key string criterionId;
+	float weight;
+}
+
+{Product} Products = ...;
+{Demand} Demands = ...;
+{Resource} Resources = ...;
+{SetupResource} SetupResources = ...;
+{StorageTank} StorageTanks = ...;
+{Step} Steps = ...;
+{Precedence} Precedences = ...;
+{Alternative} Alternatives = ...;
+{StorageProduction} StorageProductions = ...;
+{Setup} Setups = ...;
+{CriterionWeight} CriterionWeights = ...;
 
 //Decision variables
 
