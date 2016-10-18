@@ -9,13 +9,12 @@ tuple Product {
 tuple Demand {
 	key string demandId;
 	int productId;
-	int quantityl;
+	int quantity;
 	int deliveryMin;
 	int deliveryMax;
 	float nonDeliveryVariableCost;
 	int dueTime;
 	float tardinessVariableCost;
-	
 }
 
 tuple Resource {
@@ -91,8 +90,18 @@ tuple CriterionWeight {
 {Setup} Setups = ...;
 {CriterionWeight} CriterionWeights = ...;
 
-//Decision variables
+int maxQuantity = max(d in Demands) d.quantity;
+int lowestDeliveryMin = min(d in Demands) d.deliveryMin;
+int highestDeliveryMax = max(d in Demands) d.deliveryMax;
 
+{Step} stepsForProduct[p in Products] = {s | s in Steps : s.productId == p.productId};
+
+//Decision variables
+dvar interval productionStep[d in Demands][i in 1..maxQuantity][j in 1..card(Steps)]
+	optional
+	in lowestDeliveryMin..highestDeliveryMax;
+
+dvar sequence s in productionStep;
 
 //Objective
 
@@ -106,7 +115,7 @@ execute {
 
 //Constraints
 subject to {
-  
+	
 }
 
 //Post Processing
