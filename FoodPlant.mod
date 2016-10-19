@@ -90,21 +90,30 @@ tuple CriterionWeight {
 {Setup} Setups = ...;
 {CriterionWeight} CriterionWeights = ...;
 
-int maxQuantity = max(d in Demands) d.quantity;
 int lowestDeliveryMin = min(d in Demands) d.deliveryMin;
 int highestDeliveryMax = max(d in Demands) d.deliveryMax;
 
-{Step} stepsForProduct[p in Products] = {s | s in Steps : s.productId == p.productId};
+//{Step} stepsForProduct[p in Products] = {s | s in Steps : s.productId == p.productId};
 
 //Decision variables
-dvar interval productionStep[d in Demands][i in 1..maxQuantity][j in 1..card(Steps)]
+dvar interval demands[d in Demands]
 	optional
-	in lowestDeliveryMin..highestDeliveryMax;
+	in lowestDeliveryMin..highestDeliveryMax
+	size(0..d.dueTime);
 
-dvar sequence s in productionStep;
+dvar interval demandStep[d in Demands][a in Alternatives]
+	optional
+	in lowestDeliveryMin..highestDeliveryMax
+	size(a.fixedProcessingTime+ftoi(round(a.variableProcessingTime*d.quantity)));
+	
+dexpr int TotalFixedProcessingCost = 
+	sum(d in Demands, a in Alternatives) presenceOf(demandStep[d][a])*a.fixedProcessingCost;
 
-//Objective
+dexpr float TotalVariableProcessingCost = 
+	sum(d in Demands, a in Alternatives) presenceOf(demandStep[d][a])*a.variableProcessingCost*d.quantity;
 
+dexpr float TotalNonDeliveryCost = 
+	sum(d in Demands) (1-presenceOf(demands[d]))*d.nonDeliveryVariableCost*d.quantity;
 
 //Environment settings
 execute {
@@ -112,23 +121,42 @@ execute {
   cp.param.TimeLimit = Opl.card(Demands); 
 }
 
-
+//Objective
+minimize 
+	TotalFixedProcessingCost + TotalVariableProcessingCost + TotalNonDeliveryCost;
+	
 //Constraints
 subject to {
+
+	/*
+	 * All steps for a demand should be present and the end and start of intervals in 
+	 * dvar demandStep should be contained in each corresponding dvar demand interval
+	 */
+	forall(d in Demands, a in Alternatives) {
+		presenceOf(demands[d]) => presenceOf(demandStep[d][a]);
+		presenceOf(demandStep[d][a]) => presenceOf(demands[d]);
+		
+		startOf(demandStep[d][a]) >= startOf(demands[d]);
+		endOf(demandStep[d][a]) <= endOf(demands[d]);
+	}
 	
+	forall(d in Demands, a1 in Alternatives, a2 in Alternatives) {
+		forall(p in Precedences : (p.predecessorId == a1.stepId) && (p.successorId == a2.stepId))
+			endBeforeStart(demandStep[d][a1], demandStep[d][a2]);
+	}
 }
 
 //Post Processing
 
 
 //Output
-execute {
+/*execute {
   	writeln("Total Non-Delivery Cost    : ", TotalNonDeliveryCost);
   	writeln("Total Processing Cost      : ", TotalProcessingCost);
   	writeln("Total Setup Cost           : ", TotalSetupCost);
   	writeln("Total Tardiness Cost       : ", TotalTardinessCost);
   	writeln();
-  	writeln("Weighted Non-Delivery Cost : ",WeightedNonDeliveryCost);
+  	writeln("Weighted Non-Delivery Cost : ", WeightedNonDeliveryCost);
   	writeln("Weighted Processing Cost   : ", WeightedProcessingCost);
   	writeln("Weighted Setup Cost        : ", WeightedSetupCost);
   	writeln("Weighted Tardiness Cost    : ", WeightedTardinessCost);
@@ -166,4 +194,4 @@ execute {
 " which is consumed at time ", sta.endTime);	
 }		
   	}	   
-} 
+} */
