@@ -96,24 +96,34 @@ int highestDeliveryMax = max(d in Demands) d.deliveryMax;
 //{Step} stepsForProduct[p in Products] = {s | s in Steps : s.productId == p.productId};
 
 //Decision variables
-dvar interval demands[d in Demands]
+dvar interval demand[d in Demands]
 	optional
 	in lowestDeliveryMin..highestDeliveryMax
 	size(0..d.dueTime);
+	
+dvar interval demandStep[d in Demands][s in Steps]
+	optional
+	in lowestDeliveryMin..highestDeliveryMax
+	size(
+		min(a in Alternatives : a.stepId == s.stepId) (a.fixedProcessingTime + ftoi(round(d.quantity*a.variableProcessingTime)))
+		..
+		max(a in Alternatives : a.stepId == s.stepId) (a.fixedProcessingTime + ftoi(round(d.quantity*a.variableProcessingTime)))
+	);
 
-dvar interval demandStep[d in Demands][a in Alternatives]
+dvar interval demandAlternative[d in Demands][a in Alternatives]
 	optional
 	in lowestDeliveryMin..highestDeliveryMax
 	size(a.fixedProcessingTime+ftoi(round(a.variableProcessingTime*d.quantity)));
-	
+		
 dexpr int TotalFixedProcessingCost = 
-	sum(d in Demands, a in Alternatives) presenceOf(demandStep[d][a])*a.fixedProcessingCost;
+	sum(d in Demands, a in Alternatives) presenceOf(demandAlternative[d][a])*a.fixedProcessingCost;
 
 dexpr float TotalVariableProcessingCost = 
-	sum(d in Demands, a in Alternatives) presenceOf(demandStep[d][a])*a.variableProcessingCost*d.quantity;
+	sum(d in Demands, a in Alternatives) presenceOf(demandAlternative[d][a])*a.variableProcessingCost*d.quantity;
 
 dexpr float TotalNonDeliveryCost = 
-	sum(d in Demands) (1-presenceOf(demands[d]))*d.nonDeliveryVariableCost*d.quantity;
+	sum(d in Demands) (1-presenceOf(demand[d]))*d.nonDeliveryVariableCost*d.quantity;
+	
 
 //Environment settings
 execute {
@@ -132,17 +142,20 @@ subject to {
 	 * All steps for a demand should be present and the end and start of intervals in 
 	 * dvar demandStep should be contained in each corresponding dvar demand interval
 	 */
-	forall(d in Demands, a in Alternatives) {
-		presenceOf(demands[d]) => presenceOf(demandStep[d][a]);
-		presenceOf(demandStep[d][a]) => presenceOf(demands[d]);
-		
-		startOf(demandStep[d][a]) >= startOf(demands[d]);
-		endOf(demandStep[d][a]) <= endOf(demands[d]);
+	forall(d in Demands, s in Steps) {
+		(presenceOf(demand[d]) + presenceOf(demandStep[d][s])) != 1;
 	}
 	
-	forall(d in Demands, a1 in Alternatives, a2 in Alternatives) {
-		forall(p in Precedences : (p.predecessorId == a1.stepId) && (p.successorId == a2.stepId))
-			endBeforeStart(demandStep[d][a1], demandStep[d][a2]);
+	forall(d in Demands)
+    	span(demand[d], all(s in Steps) demandStep[d][s]);
+	
+	forall(d in Demands, s1 in Steps, s2 in Steps) {
+		forall(p in Precedences : (p.predecessorId == s1.stepId) && (p.successorId == s1.stepId))
+			endBeforeStart(demandStep[d][s1], demandStep[d][s2]);
+	}
+	
+	forall(d in Demands, s in Steps) {
+		alternative(demandStep[d][s], all(alt in Alternatives: alt.stepId==s.stepId) demandAlternative[d][alt]);
 	}
 }
 
