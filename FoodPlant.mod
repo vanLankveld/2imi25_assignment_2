@@ -101,6 +101,8 @@ dvar interval demand[d in Demands]
 	in lowestDeliveryMin..highestDeliveryMax
 	size(0..d.dueTime);
 	
+dvar sequence demandSeq in demand;
+	
 dvar interval demandStep[d in Demands][s in Steps]
 	optional
 	in lowestDeliveryMin..highestDeliveryMax
@@ -124,6 +126,15 @@ dexpr float TotalVariableProcessingCost =
 dexpr float TotalNonDeliveryCost = 
 	sum(d in Demands) (1-presenceOf(demand[d]))*d.nonDeliveryVariableCost*d.quantity;
 	
+pwlFunction tardiness[d in Demands] = 
+	piecewise{0->d.dueTime;d.tardinessVariableCost}(0,0);	
+	          				
+dexpr float TardinessCost[d in Demands] =
+	endEval(demand[d], tardiness[d]);
+	 
+dexpr float TotalTardinessCost = 
+	sum(d in Demands) TardinessCost[d]; 
+	
 
 //Environment settings
 execute {
@@ -133,7 +144,10 @@ execute {
 
 //Objective
 minimize 
-	TotalFixedProcessingCost + TotalVariableProcessingCost + TotalNonDeliveryCost;
+	TotalFixedProcessingCost + 
+	TotalVariableProcessingCost + 
+	TotalNonDeliveryCost +
+	TotalTardinessCost;
 	
 //Constraints
 subject to {
@@ -146,14 +160,24 @@ subject to {
 		(presenceOf(demand[d]) + presenceOf(demandStep[d][s])) != 1;
 	}
 	
+	//No overlap between demands: demand is processed as a single entity
+	noOverlap(demandSeq);
+	
+	//Steps of a demand must be within the demand interval
 	forall(d in Demands)
     	span(demand[d], all(s in Steps) demandStep[d][s]);
 	
+	//Demand step precedences
 	forall(d in Demands, s1 in Steps, s2 in Steps) {
-		forall(p in Precedences : (p.predecessorId == s1.stepId) && (p.successorId == s1.stepId))
-			endBeforeStart(demandStep[d][s1], demandStep[d][s2]);
+		forall(p in Precedences : (p.predecessorId == s1.stepId) && (p.successorId == s2.stepId)) {
+			endBeforeStart(demandStep[d][s1], demandStep[d][s2], p.delayMin);
+			
+			//Maximal delay between steps
+			startOf(demandStep[d][s2])-endOf(demandStep[d][s1]) <= p.delayMax;
+ 		}			
 	}
 	
+	//Alternatives for a step
 	forall(d in Demands, s in Steps) {
 		alternative(demandStep[d][s], all(alt in Alternatives: alt.stepId==s.stepId) demandAlternative[d][alt]);
 	}
