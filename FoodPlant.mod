@@ -1,3 +1,7 @@
+//Student names and numbers:
+//Guus van Lankveld		0629468
+//Xiayang Hao			0892474
+
 using CP;
 
 //Input data
@@ -98,11 +102,10 @@ int highestDeliveryMax = max(d in Demands) d.deliveryMax;
 //Decision variables
 dvar interval demand[d in Demands]
 	optional
-	in lowestDeliveryMin..highestDeliveryMax
-	size(0..d.dueTime);
-	
-dvar sequence demandSeq in demand;
-	
+	in d.deliveryMin..d.deliveryMax
+	size(0..(d.deliveryMax-d.deliveryMin));
+
+//Each demand and each step for a demand which is scheduled. Since not every demand has an equal number of steps, the interval is optional
 dvar interval demandStep[d in Demands][s in Steps]
 	optional
 	in lowestDeliveryMin..highestDeliveryMax
@@ -116,6 +119,10 @@ dvar interval demandAlternative[d in Demands][a in Alternatives]
 	optional
 	in lowestDeliveryMin..highestDeliveryMax
 	size(a.fixedProcessingTime+ftoi(round(a.variableProcessingTime*d.quantity)));
+	
+dvar sequence resources[r in Resources] 
+	in all(d in Demands, s in Steps, a in Alternatives : 
+			s.productId == d.productId && a.stepId == s.stepId && a.resourceId == r.resourceId) demandStep[d][s];
 		
 dexpr int TotalFixedProcessingCost = 
 	sum(d in Demands, a in Alternatives) presenceOf(demandAlternative[d][a])*a.fixedProcessingCost;
@@ -157,11 +164,12 @@ subject to {
 	 * dvar demandStep should be contained in each corresponding dvar demand interval
 	 */
 	forall(d in Demands, s in Steps) {
-		(presenceOf(demand[d]) + presenceOf(demandStep[d][s])) != 1;
+		(presenceOf(demand[d]) == presenceOf(demandStep[d][s]));
 	}
 	
-	//No overlap between demands: demand is processed as a single entity
-	noOverlap(demandSeq);
+	//No overlap between steps on a single resource
+	forall(r in Resources)
+	  noOverlap(resources[r]);
 	
 	//Steps of a demand must be within the demand interval
 	forall(d in Demands)
