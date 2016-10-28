@@ -112,17 +112,23 @@ dvar interval demandStep[d in Demands][s in Steps]
 	size(
 		min(a in Alternatives : a.stepId == s.stepId) (a.fixedProcessingTime + ftoi(round(d.quantity*a.variableProcessingTime)))
 		..
-		max(a in Alternatives : a.stepId == s.stepId) (a.fixedProcessingTime + ftoi(round(d.quantity*a.variableProcessingTime)))
+		((max(sr in Setups : sr.toState == s.productId) sr.setupTime) + 
+			max(a in Alternatives : a.stepId == s.stepId) (a.fixedProcessingTime + ftoi(round(d.quantity*a.variableProcessingTime))))
 	);
 
 dvar interval demandAlternative[d in Demands][a in Alternatives]
 	optional
 	in lowestDeliveryMin..highestDeliveryMax
-	size(a.fixedProcessingTime+ftoi(round(a.variableProcessingTime*d.quantity)));
+	size (
+		(a.fixedProcessingTime+ftoi(round(a.variableProcessingTime*d.quantity)))
+		..
+		((max(sr in Setups, s in Steps : sr.toState == s.productId && s.stepId == a.stepId) sr.setupTime)+
+			(a.fixedProcessingTime+ftoi(round(a.variableProcessingTime*d.quantity))))
+	);
 	
 dvar sequence resources[r in Resources] 
 	in all(d in Demands, s in Steps, a in Alternatives : 
-			s.productId == d.productId && a.stepId == s.stepId && a.resourceId == r.resourceId) demandStep[d][s];
+			s.productId == d.productId && a.stepId == s.stepId && a.resourceId == r.resourceId) demandAlternative[d][a];
 		
 dexpr int TotalFixedProcessingCost = 
 	sum(d in Demands, a in Alternatives) presenceOf(demandAlternative[d][a])*a.fixedProcessingCost;
@@ -158,13 +164,16 @@ minimize
 	
 //Constraints
 subject to {
-
 	/*
-	 * All steps for a demand should be present and the end and start of intervals in 
-	 * dvar demandStep should be contained in each corresponding dvar demand interval
+	 * All steps for a demand should be present when the demand itself is present
 	 */
-	forall(d in Demands, s in Steps) {
+	forall(d in Demands, s in Steps : d.productId == s.productId) {
 		(presenceOf(demand[d]) == presenceOf(demandStep[d][s]));
+	}
+	
+	//No demand/step combination should be present when the step is not required for a demand
+	forall(d in Demands, s in Steps : d.productId != s.productId) {
+		!presenceOf(demandStep[d][s]);
 	}
 	
 	//No overlap between steps on a single resource
@@ -189,6 +198,8 @@ subject to {
 	forall(d in Demands, s in Steps) {
 		alternative(demandStep[d][s], all(alt in Alternatives: alt.stepId==s.stepId) demandAlternative[d][alt]);
 	}
+	
+	//Length of each alternative
 }
 
 //Post Processing
