@@ -116,6 +116,7 @@ dvar interval demandStep[d in Demands][s in Steps]
 			max(a in Alternatives : a.stepId == s.stepId) (a.fixedProcessingTime + ftoi(round(d.quantity*a.variableProcessingTime))))
 	);
 
+//Alternatives for each step scheduled in 
 dvar interval demandAlternative[d in Demands][a in Alternatives]
 	optional
 	in lowestDeliveryMin..highestDeliveryMax
@@ -130,6 +131,7 @@ dvar sequence resources[r in Resources]
 	in all(d in Demands, s in Steps, a in Alternatives : 
 			s.productId == d.productId && a.stepId == s.stepId && a.resourceId == r.resourceId) demandAlternative[d][a];
 		
+//Expressions
 dexpr int TotalFixedProcessingCost = 
 	sum(d in Demands, a in Alternatives) presenceOf(demandAlternative[d][a])*a.fixedProcessingCost;
 
@@ -164,10 +166,11 @@ minimize
 	
 //Constraints
 subject to {
-	/*
-	 * All steps for a demand should be present when the demand itself is present
-	 */
+	//All steps for a demand should be present when the demand itself is present
 	forall(d in Demands, s in Steps : d.productId == s.productId) {
+		//Old version. Not correct since this still allows demandStep[x][y] to be present  even if demand[x] is absent
+		//(presenceOf(demand[d]) => presenceOf(demandStep[d][s]));
+		
 		(presenceOf(demand[d]) == presenceOf(demandStep[d][s]));
 	}
 	
@@ -199,7 +202,19 @@ subject to {
 		alternative(demandStep[d][s], all(alt in Alternatives: alt.stepId==s.stepId) demandAlternative[d][alt]);
 	}
 	
-	//Length of each alternative
+	//Length of each alternative, including the setup time
+	forall(d in Demands, a in Alternatives, r in Resources, s in Steps, su in Setups : 
+				a.resourceId == r.resourceId && a.stepId == s.stepId && r.setupMatrixId == su.setupMatrixId &&
+				su.fromState == r.initialProductId && su.toState == s.productId) {
+		//Alternative is either not present or has length of processingtime+setuptime
+		!presenceOf(demandAlternative[d][a]) || (
+			lengthOf(demandAlternative[d][a]) == (
+				a.fixedProcessingTime + ftoi(round(d.quantity*a.variableProcessingTime)) + (
+					((s.setupResourceId != "NULL") && (r.setupMatrixId != "NULL")) * (su.setupTime)
+				)
+			)
+		);
+	}
 }
 
 //Post Processing
