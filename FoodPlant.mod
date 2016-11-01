@@ -126,10 +126,33 @@ dvar interval demandAlternative[d in Demands][a in Alternatives]
 		((max(sr in Setups, s in Steps : sr.toState == s.productId && s.stepId == a.stepId) sr.setupTime)+
 			(a.fixedProcessingTime+ftoi(round(a.variableProcessingTime*d.quantity))))
 	);
-	
+	//Storagetank for each demand scheduled in 
+dvar interval demandStoragetank[d in Demands][s in StorageTanks]
+	optional
+	in lowestDeliveryMin..highestDeliveryMax
+	size (
+		0
+		..
+		(max(sr in Setups : sr.setupMatrixId == s.setupMatrixId ) sr.setupTime)+
+		(max(p in Precedences, st1 in Steps, st2 in Steps : st1.productId==d.productId&&
+		st2.productId==d.productId&&st1.stepId==p.predecessorId&&st2.stepId==p.successorId ) p.delayMax) // (startOf(demandStep[d][st2])-endOf(demandStep[d][st1])))
+	);
+	dvar interval demandStoragetank1[s in StorageTanks]
+	optional
+	in lowestDeliveryMin..highestDeliveryMax
+	size (
+		0
+		..
+		(max(sr in Setups : sr.setupMatrixId == s.setupMatrixId ) sr.setupTime)+
+		(max(d in Demands,p in Precedences, st1 in Steps, st2 in Steps : st1.productId==d.productId&&
+		st2.productId==d.productId&&st1.stepId==p.predecessorId&&st2.stepId==p.successorId ) p.delayMax) // (startOf(demandStep[d][st2])-endOf(demandStep[d][st1])))
+	);
 dvar sequence resources[r in Resources] 
 	in all(d in Demands, s in Steps, a in Alternatives : 
 			s.productId == d.productId && a.stepId == s.stepId && a.resourceId == r.resourceId) demandAlternative[d][a];
+dvar sequence storagetank[s in StorageTanks] 
+	in all(sp in StorageProductions, p in Precedences, s1 in Steps,s2 in Steps,d in Demands : 
+			s1.productId == d.productId&&s2.productId == d.productId && p.predecessorId == s1.stepId &&p.successorId == s2.stepId&& p.predecessorId==sp.prodStepId&&p.successorId==sp.consStepId&&sp.consStepId==s.storageTankId) demandStoragetank[d][s];
 		
 //Expressions
 dexpr int TotalFixedProcessingCost = 
@@ -215,7 +238,19 @@ subject to {
 			)
 		);
 	}
-}
+	//Storage
+		//No overlap of storage
+	forall(s in StorageTanks)
+	  noOverlap(storagetank[s]);
+	  
+	  
+	  forall(sp in StorageProductions, p in Precedences, s1 in Steps,s2 in Steps,d in Demands,s in StorageTanks: 
+			s1.productId == d.productId&&s2.productId == d.productId && p.predecessorId == s1.stepId &&p.successorId == s2.stepId&& 
+			p.predecessorId==sp.prodStepId&&p.successorId==sp.consStepId&&sp.consStepId==s.storageTankId&&sp.storageTankId==s.storageTankId)
+			 {
+			 			s.quantityMax- d.quantity>=0;
+			 }
+	
 
 //Post Processing
 
@@ -266,3 +301,4 @@ subject to {
 }		
   	}	   
 } */
+}
