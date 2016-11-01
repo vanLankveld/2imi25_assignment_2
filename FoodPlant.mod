@@ -150,6 +150,12 @@ dexpr float TardinessCost[d in Demands] =
 dexpr float TotalTardinessCost = 
 	sum(d in Demands) TardinessCost[d]; 
 	
+dexpr float TotalSetupCost = 
+	sum(d in Demands, a in Alternatives, r in Resources, s in Steps, su in Setups : 
+			a.resourceId == r.resourceId && a.stepId == s.stepId && r.setupMatrixId == su.setupMatrixId &&
+			su.fromState == r.initialProductId && su.toState == s.productId) 
+			presenceOf(demandStep[d][s]) * su.setupCost;
+	
 
 //Environment settings
 execute {
@@ -162,7 +168,8 @@ minimize
 	TotalFixedProcessingCost + 
 	TotalVariableProcessingCost + 
 	TotalNonDeliveryCost +
-	TotalTardinessCost;
+	TotalTardinessCost + 
+	TotalSetupCost;
 	
 //Constraints
 subject to {
