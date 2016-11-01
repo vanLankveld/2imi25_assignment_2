@@ -102,7 +102,7 @@ int highestDeliveryMax = max(d in Demands) d.deliveryMax;
 //Decision variables
 dvar interval demand[d in Demands]
 	optional
-	in d.deliveryMin..d.deliveryMax
+	in 0..d.deliveryMax
 	size(0..(d.deliveryMax-d.deliveryMin));
 
 //Each demand and each step for a demand which is scheduled. Since not every demand has an equal number of steps, the interval is optional
@@ -196,6 +196,13 @@ minimize
 	
 //Constraints
 subject to {
+
+	//Demands cannot be finished before their deliveryMin time
+	forall(d in Demands) {
+		endOf(demand[d]) >= d.deliveryMin;
+	}
+
+
 	//All steps for a demand should be present when the demand itself is present
 	forall(d in Demands, s in Steps : d.productId == s.productId) {
 		//Old version. Not correct since this still allows demandStep[x][y] to be present  even if demand[x] is absent
