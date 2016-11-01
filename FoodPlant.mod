@@ -137,7 +137,7 @@ dvar interval demandStoragetank[d in Demands][s in StorageTanks]
 		(max(p in Precedences, st1 in Steps, st2 in Steps : st1.productId==d.productId&&
 		st2.productId==d.productId&&st1.stepId==p.predecessorId&&st2.stepId==p.successorId ) p.delayMax) // (startOf(demandStep[d][st2])-endOf(demandStep[d][st1])))
 	);
-	dvar interval demandStoragetank1[s in StorageTanks]
+dvar interval demandStoragetank1[s in StorageTanks]
 	optional
 	in lowestDeliveryMin..highestDeliveryMax
 	size (
@@ -179,7 +179,7 @@ dexpr float TotalSetupCost =
 			su.fromState == r.initialProductId && su.toState == s.productId) 
 			presenceOf(demandStep[d][s]) * su.setupCost;
 	
-
+cumulFunction StorageFulse[s in StorageTanks] = sum(d in Demands) pulse(demandStoragetank[d][s],d.quantity);
 //Environment settings
 execute {
   cp.param.Workers = 1;
@@ -255,7 +255,9 @@ subject to {
 			s1.productId == d.productId&&s2.productId == d.productId && p.predecessorId == s1.stepId &&p.successorId == s2.stepId&& 
 			p.predecessorId==sp.prodStepId&&p.successorId==sp.consStepId&&sp.consStepId==s.storageTankId&&sp.storageTankId==s.storageTankId)
 			 {
-			 			s.quantityMax- d.quantity>=0;
+			 			//s.quantityMax- d.quantity>=0;
+			 			StorageFulse[s]<=s.quantityMax;
+
 			 }
 	
 
