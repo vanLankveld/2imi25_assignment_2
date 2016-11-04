@@ -102,7 +102,7 @@ int highestDeliveryMax = max(d in Demands) d.deliveryMax;
 //Decision variables
 dvar interval demand[d in Demands]
 	optional
-	in 0..d.deliveryMax
+	in d.deliveryMin..d.deliveryMax
 	size(0..(d.deliveryMax-d.deliveryMin));
 
 //Each demand and each step for a demand which is scheduled. Since not every demand has an equal number of steps, the interval is optional
@@ -126,33 +126,39 @@ dvar interval demandAlternative[d in Demands][a in Alternatives]
 		((max(sr in Setups, s in Steps : sr.toState == s.productId && s.stepId == a.stepId) sr.setupTime)+
 			(a.fixedProcessingTime+ftoi(round(a.variableProcessingTime*d.quantity))))
 	);
-	//Storagetank for each demand scheduled in 
-dvar interval demandStoragetank[d in Demands][s in StorageTanks]
-	optional
-	in lowestDeliveryMin..highestDeliveryMax
-	size (
-		0
-		..
-		(max(sr in Setups : sr.setupMatrixId == s.setupMatrixId ) sr.setupTime)+
-		(max(p in Precedences, st1 in Steps, st2 in Steps : st1.productId==d.productId&&
-		st2.productId==d.productId&&st1.stepId==p.predecessorId&&st2.stepId==p.successorId ) p.delayMax) // (startOf(demandStep[d][st2])-endOf(demandStep[d][st1])))
-	);
-dvar interval demandStoragetank1[s in StorageTanks]
-	optional
-	in lowestDeliveryMin..highestDeliveryMax
-	size (
-		0
-		..
-		(max(sr in Setups : sr.setupMatrixId == s.setupMatrixId ) sr.setupTime)+
-		(max(d in Demands,p in Precedences, st1 in Steps, st2 in Steps : st1.productId==d.productId&&
-		st2.productId==d.productId&&st1.stepId==p.predecessorId&&st2.stepId==p.successorId ) p.delayMax) // (startOf(demandStep[d][st2])-endOf(demandStep[d][st1])))
-	);
+	
 dvar sequence resources[r in Resources] 
 	in all(d in Demands, s in Steps, a in Alternatives : 
 			s.productId == d.productId && a.stepId == s.stepId && a.resourceId == r.resourceId) demandAlternative[d][a];
-dvar sequence storagetank[s in StorageTanks] 
-	in all(sp in StorageProductions, p in Precedences, s1 in Steps,s2 in Steps,d in Demands : 
-			s1.productId == d.productId&&s2.productId == d.productId && p.predecessorId == s1.stepId &&p.successorId == s2.stepId&& p.predecessorId==sp.prodStepId&&p.successorId==sp.consStepId&&sp.consStepId==s.storageTankId) demandStoragetank[d][s];
+	
+tuple DemandProduction {
+	Demand d;
+	Step ps;
+}
+
+{DemandProduction} DemandProductions = {<d, ps> | d in Demands, ps in Steps : d.productId == ps.productId};
+	
+dvar interval storageSteps[<d, ps> in DemandProductions]
+	optional
+	in 0..d.deliveryMax;
+	
+tuple DemandStorage {
+  Demand demand;
+  StorageProduction storageProduction;
+}
+
+{DemandStorage} DemandStorages =
+{<d,sp> | d in Demands, sp in StorageProductions, st in Steps 
+       : sp.prodStepId == st.stepId && st.productId == d.productId};
+
+dvar interval storageAltSteps[<d,sp> in DemandStorages]
+optional
+in 0..d.deliveryMax;
+
+cumulFunction storageTanks[r in StorageTanks] =
+(sum(<d,sp> in DemandStorages 
+   : sp.storageTankId == r.storageTankId)
+   pulse(storageAltSteps[<d,sp>], d.quantity));
 		
 //Expressions
 dexpr int TotalFixedProcessingCost = 
@@ -179,7 +185,7 @@ dexpr float TotalSetupCost =
 			su.fromState == r.initialProductId && su.toState == s.productId) 
 			presenceOf(demandStep[d][s]) * su.setupCost;
 	
-cumulFunction StorageFulse[s in StorageTanks] = sum(d in Demands) pulse(demandStoragetank[d][s],d.quantity);
+
 //Environment settings
 execute {
   cp.param.Workers = 1;
@@ -196,13 +202,6 @@ minimize
 	
 //Constraints
 subject to {
-
-	//Demands cannot be finished before their deliveryMin time
-	forall(d in Demands) {
-		endOf(demand[d]) >= d.deliveryMin;
-	}
-
-
 	//All steps for a demand should be present when the demand itself is present
 	forall(d in Demands, s in Steps : d.productId == s.productId) {
 		//Old version. Not correct since this still allows demandStep[x][y] to be present  even if demand[x] is absent
@@ -252,21 +251,27 @@ subject to {
 			)
 		);
 	}
-	//Storage
-		//No overlap of storage
-	forall(s in StorageTanks)
-	  noOverlap(storagetank[s]);
-	  
-	  
-	  forall(sp in StorageProductions, p in Precedences, s1 in Steps,s2 in Steps,d in Demands,s in StorageTanks: 
-			s1.productId == d.productId&&s2.productId == d.productId && p.predecessorId == s1.stepId &&p.successorId == s2.stepId&& 
-			p.predecessorId==sp.prodStepId&&p.successorId==sp.consStepId&&sp.consStepId==s.storageTankId&&sp.storageTankId==s.storageTankId)
-			 {
-			 			//s.quantityMax- d.quantity>=0;
-			 			StorageFulse[s]<=s.quantityMax;
-
-			 }
 	
+	//A demandstep should use a single suitable storage tank
+	forall(<d, ps> in DemandProductions) {
+		alternative(storageSteps[<d, ps>], all(sp in StorageProductions : sp.prodStepId == ps.stepId) storageAltSteps[<d, sp>]);
+	}
+	
+	forall(<d, ps1> in DemandProductions, <d, ps2> in DemandProductions, <d, sp> in DemandStorages : 
+			sp.prodStepId == ps1.stepId && sp.consStepId == ps2.stepId) {
+		(startOf(demandStep[d][ps2])-endOf(demandStep[d][ps1]) > 0)	== presenceOf(storageSteps[<d, ps1>]);		
+	}
+	
+	forall(pr in Precedences, <d, sp> in DemandStorages : pr.predecessorId == sp.prodStepId && pr.successorId == sp.consStepId) {
+		endAtStart(demandStep[d][<sp.prodStepId>], storageAltSteps[<d, sp>]) &&
+		startAtEnd(demandStep[d][<sp.consStepId>], storageAltSteps[<d, sp>]);
+	}
+	
+	//A storaretank cannot exceed maximum capacity
+	forall(r in StorageTanks) {
+		storageTanks[r] <= r.quantityMax;
+	}
+}
 
 //Post Processing
 
@@ -316,5 +321,4 @@ subject to {
 " which is consumed at time ", sta.endTime);	
 }		
   	}	   
-} */
-}
+}*/
