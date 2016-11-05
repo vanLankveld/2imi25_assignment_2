@@ -207,10 +207,10 @@ dexpr float TotalSetupCost =
 			a.resourceId == r.resourceId && a.stepId == s.stepId && r.setupMatrixId == su.setupMatrixId &&
 			su.fromState == r.initialProductId && su.toState == s.productId) 
 			presenceOf(demandStep[d][s]) * su.setupCost;
-dexpr float WeightedNonDeliveryCost= sum(c in CriterionWeights :c.criterionId == "NonDeliveryCost")(c.weight*TotalNonDeliveryCost);
-dexpr float WeightedProcessingCost=sum(c in CriterionWeights :c.criterionId =="ProcessingCost")(c.weight*TotalProcessingCost);
-dexpr float WeightedSetupCost=sum(c in CriterionWeights :c.criterionId =="SetupCost")(c.weight*TotalSetupCost);
-dexpr float WeightedTardinessCost=sum(c in CriterionWeights :c.criterionId =="TardinessCost")(c.weight*TotalTardinessCost);
+dexpr float WeightedNonDeliveryCost= max(c in CriterionWeights :c.criterionId == "NonDeliveryCost")(c.weight*TotalNonDeliveryCost);
+dexpr float WeightedProcessingCost=max(c in CriterionWeights :c.criterionId =="ProcessingCost")(c.weight*TotalProcessingCost);
+dexpr float WeightedSetupCost=max(c in CriterionWeights :c.criterionId =="SetupCost")(c.weight*TotalSetupCost);
+dexpr float WeightedTardinessCost=max(c in CriterionWeights :c.criterionId =="TardinessCost")(c.weight*TotalTardinessCost);
 
 //Environment settings
 execute {
@@ -220,10 +220,10 @@ execute {
 
 //Objective
 minimize 
-	TotalProcessingCost + 
-	TotalNonDeliveryCost +
-	TotalTardinessCost + 
-	TotalSetupCost;
+	WeightedNonDeliveryCost + 
+	WeightedProcessingCost +
+	WeightedSetupCost + 
+	WeightedTardinessCost;
 	
 //Constraints
 subject to {
@@ -332,9 +332,10 @@ tuple StepAssignment {
   int endTime;
   string resourceId;
   float procCost;
- // float setupCost;
- // int startTimeSetup;
-  int endTimeSetup;
+  float setupCost;
+   int endTimeSetup;
+  int startTimeSetup;
+ 
  string setupResourceId;
 };
 
@@ -347,12 +348,17 @@ tuple StepAssignment {
 	endOf(demandAlternative[<d,a>]),
 	a.resourceId,
 	a.fixedProcessingTime + ftoi(round(d.quantity*a.variableProcessingTime)),
-	//set.setupCost,
-	// endOf(demand[dfrom]),
+	su.setupCost,
 	startOf(demand[d]),
-	s.setupResourceId>
-	|<d,a> in DemandAlternatives,s in Steps//, r in Resources,set in Setups
-	:presenceOf(demandAlternative[<d,a>])==true&&s.productId == d.productId && a.stepId == s.stepId
+	 //endOf(demand[d1]),
+	startOf(demand[d])+su.setupTime,
+	s.setupResourceId> 
+	
+	|<d,a> in DemandAlternatives, r in Resources, s in Steps, su in Setups : presenceOf(demandAlternative[<d,a>])==true&&
+				a.resourceId == r.resourceId && a.stepId == s.stepId && r.setupMatrixId == su.setupMatrixId &&
+				su.fromState == r.initialProductId && su.toState == s.productId
+	//|<d,a> in DemandAlternatives,s in Steps//, r in Resources,set in Setups
+	//:presenceOf(demandAlternative[<d,a>])==true&&s.productId == d.productId && a.stepId == s.stepId
 	//&&a.resourceId==r.resourceId&&r.setupMatrixId==set.setupMatrixId&& d.productId==set.toState
 
 };
