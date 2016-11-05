@@ -1,6 +1,6 @@
 //Student names and numbers:
-//Guus van Lankveld		0629468
-//Xiayang Hao			0892474
+//Guus van Lankveld		0629468		g.v.lankveld@student.tue.nl
+//Xiayang Hao			0892474		x.hao@student.tue.nl
 
 using CP;
 
