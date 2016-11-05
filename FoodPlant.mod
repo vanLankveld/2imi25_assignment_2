@@ -178,6 +178,8 @@ dexpr int TotalFixedProcessingCost =
 dexpr float TotalVariableProcessingCost = 
 	sum(d in Demands, a in Alternatives) presenceOf(demandAlternative[d][a])*a.variableProcessingCost*d.quantity;
 
+dexpr float TotalProcessingCost = TotalFixedProcessingCost+TotalVariableProcessingCost;
+
 dexpr float TotalNonDeliveryCost = 
 	sum(d in Demands) (1-presenceOf(demand[d]))*d.nonDeliveryVariableCost*d.quantity;
 	
@@ -205,8 +207,7 @@ execute {
 
 //Objective
 minimize 
-	TotalFixedProcessingCost + 
-	TotalVariableProcessingCost + 
+	TotalProcessingCost + 
 	TotalNonDeliveryCost +
 	TotalTardinessCost + 
 	TotalSetupCost;
@@ -292,8 +293,7 @@ subject to {
 	}
 }
 
-
-
+//Post Processing
 tuple DemandAssignment {
   key string demandId; 
   int startTime;    	
@@ -303,13 +303,13 @@ tuple DemandAssignment {
 };
 
 //{DemandAssignment} demandAssignments = fill in from your decision variables.
-{DemandAssignment} demandAssignments =
-{<d.demandId, 
-  startOf(demand[d]), 
-  endOf(demand[d]), 
-  d.nonDeliveryVariableCost,
-  d.tardinessVariableCost> 
- | d in Demands
+{DemandAssignment} demandAssignments = {
+	<d.demandId, 
+	  startOf(demand[d]), 
+	  endOf(demand[d]), 
+	  d.nonDeliveryVariableCost,
+	  d.tardinessVariableCost> 
+	 | d in Demands
 };
 
 tuple StepAssignment {
@@ -325,20 +325,20 @@ tuple StepAssignment {
   string setupResourceId;
 };
 
-{StepAssignment} stepAssignments = 
-{<d.demandId,
-a.stepId,
-startOf(demandAlternative[d][a]),
-endOf(demandAlternative[d][a]),
-a.resourceId,
-a.fixedProcessingTime + ftoi(round(d.quantity*a.variableProcessingTime)),
-set.setupCost,
- endOf(demand[dfrom]),
-startOf(demand[dto]),
-s.setupResourceId>
-|d in Demands,a in Alternatives,set in Setups,dfrom in Demands,dto in Demands,s in Steps,s1 in Steps,p in Precedences: a.stepId==s.stepId&&s.productId==set.toState
-&&s.stepId==p.successorId&&p.predecessorId==s1.stepId&&dto.productId==s.productId&&s.productId==set.toState
-&&dfrom.productId==s1.productId&&s1.productId==set.fromState
+{StepAssignment} stepAssignments = {
+	<d.demandId,
+	a.stepId,
+	startOf(demandAlternative[d][a]),
+	endOf(demandAlternative[d][a]),
+	a.resourceId,
+	a.fixedProcessingTime + ftoi(round(d.quantity*a.variableProcessingTime)),
+	set.setupCost,
+	 endOf(demand[dfrom]),
+	startOf(demand[dto]),
+	s.setupResourceId>
+	|d in Demands,a in Alternatives,set in Setups,dfrom in Demands,dto in Demands,s in Steps,s1 in Steps,p in Precedences: a.stepId==s.stepId&&s.productId==set.toState
+	&&s.stepId==p.successorId&&p.predecessorId==s1.stepId&&dto.productId==s.productId&&s.productId==set.toState
+	&&dfrom.productId==s1.productId&&s1.productId==set.fromState
 };
 
 tuple StorageAssignment {
@@ -350,38 +350,28 @@ tuple StorageAssignment {
   string storageTankId;
 };
 
-{StorageAssignment} storageAssignments = 
-{<d.demandId,
-sp.prodStepId,
-startOf(storageAltSteps[<d,sp>]),
-endOf(storageAltSteps[<d,sp>]),
-d.quantity,
-sp.storageTankId>
-| d in Demands,sp in StorageProductions : presenceOf(storageAltSteps[<d,sp>])==true
-
+{StorageAssignment} storageAssignments = {
+	<d.demandId,
+	sp.prodStepId,
+	startOf(storageAltSteps[<d,sp>]),
+	endOf(storageAltSteps[<d,sp>]),
+	d.quantity,
+	sp.storageTankId>
+	| d in Demands,sp in StorageProductions : presenceOf(storageAltSteps[<d,sp>])==true
 };
-
-
-
-
-//Post Processing
-
 
 //Output
 execute {
-
-
-
   	writeln("Total Non-Delivery Cost    : ", TotalNonDeliveryCost);
   	writeln("Total Processing Cost      : ", TotalProcessingCost);
   	writeln("Total Setup Cost           : ", TotalSetupCost);
   	writeln("Total Tardiness Cost       : ", TotalTardinessCost);
   	writeln();
-  	writeln("Weighted Non-Delivery Cost : ", WeightedNonDeliveryCost);
-  	writeln("Weighted Processing Cost   : ", WeightedProcessingCost);
-  	writeln("Weighted Setup Cost        : ", WeightedSetupCost);
-  	writeln("Weighted Tardiness Cost    : ", WeightedTardinessCost);
-  	writeln();
+  	//writeln("Weighted Non-Delivery Cost : ", WeightedNonDeliveryCost);
+  	//writeln("Weighted Processing Cost   : ", WeightedProcessingCost);
+  	//writeln("Weighted Setup Cost        : ", WeightedSetupCost);
+  	//writeln("Weighted Tardiness Cost    : ", WeightedTardinessCost);
+  	//writeln();
      
   	for(var d in demandAssignments) {
  		writeln(d.demandId, ": [", 
