@@ -155,6 +155,17 @@ dvar interval storageAltSteps[<d,sp> in DemandStorages]
 optional
 in 0..d.deliveryMax;
 
+tuple DemandStorageProduct {
+	DemandStorage ds;
+	Product fromProduct;
+	Product toProduct;
+}
+
+{DemandStorageProduct} DemandStorageProducts = {
+	<<d, sp>, p1, p2> | <d, sp> in DemandStorages, p1 in Products, p2 in Products, s1 in Steps, s2 in Steps : 
+	sp.prodStepId == s1.stepId && sp.consStepId == s2.stepId && s1.productId == p1.productId && s2.productId == s2.productId
+};
+
 cumulFunction storageTanks[r in StorageTanks] =
 (sum(<d,sp> in DemandStorages 
    : sp.storageTankId == r.storageTankId)
@@ -184,11 +195,11 @@ dexpr float TotalSetupCost =
 			a.resourceId == r.resourceId && a.stepId == s.stepId && r.setupMatrixId == su.setupMatrixId &&
 			su.fromState == r.initialProductId && su.toState == s.productId) 
 			presenceOf(demandStep[d][s]) * su.setupCost;
-	
+
 
 //Environment settings
 execute {
-  cp.param.Workers = 1;
+  cp.param.Workers = 1
   cp.param.TimeLimit = Opl.card(Demands); 
 }
 
@@ -270,6 +281,14 @@ subject to {
 	//A storaretank cannot exceed maximum capacity
 	forall(r in StorageTanks) {
 		storageTanks[r] <= r.quantityMax;
+	}
+	
+	//Setuptime for storage tanks
+	forall(<<d, sp>, p1, p2> in DemandStorageProducts, r in StorageTanks, su in Setups : 
+			sp.storageTankId == r.storageTankId && su.fromState == p1.productId && su.toState == p2.productId) {
+		!presenceOf(storageAltSteps[<d, sp>]) || (
+			lengthOf(storageAltSteps[<d, sp>]) >= su.setupTime
+		);
 	}
 }
 
