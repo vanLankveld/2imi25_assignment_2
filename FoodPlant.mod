@@ -292,11 +292,86 @@ subject to {
 	}
 }
 
+
+
+tuple DemandAssignment {
+  key string demandId; 
+  int startTime;    	
+  int endTime;
+  float nonDeliveryCost;
+  float tardinessCost;
+};
+
+//{DemandAssignment} demandAssignments = fill in from your decision variables.
+{DemandAssignment} demandAssignments =
+{<d.demandId, 
+  startOf(demand[d]), 
+  endOf(demand[d]), 
+  d.nonDeliveryVariableCost,
+  d.tardinessVariableCost> 
+ | d in Demands
+};
+
+tuple StepAssignment {
+  key string demandId; 
+  key string stepId;  	
+  int startTime;    	
+  int endTime;
+  string resourceId;
+  float procCost;
+  float setupCost;
+  int startTimeSetup;
+  int endTimeSetup;
+  string setupResourceId;
+};
+
+{StepAssignment} stepAssignments = 
+{<d.demandId,
+a.stepId,
+startOf(demandAlternative[d][a]),
+endOf(demandAlternative[d][a]),
+a.resourceId,
+a.fixedProcessingTime + ftoi(round(d.quantity*a.variableProcessingTime)),
+set.setupCost,
+ endOf(demand[dfrom]),
+startOf(demand[dto]),
+s.setupResourceId>
+|d in Demands,a in Alternatives,set in Setups,dfrom in Demands,dto in Demands,s in Steps,s1 in Steps,p in Precedences: a.stepId==s.stepId&&s.productId==set.toState
+&&s.stepId==p.successorId&&p.predecessorId==s1.stepId&&dto.productId==s.productId&&s.productId==set.toState
+&&dfrom.productId==s1.productId&&s1.productId==set.fromState
+};
+
+tuple StorageAssignment {
+  key string demandId; 
+  key string prodStepId;  	
+  int startTime;    	
+  int endTime;
+  int quantity;
+  string storageTankId;
+};
+
+{StorageAssignment} storageAssignments = 
+{<d.demandId,
+sp.prodStepId,
+startOf(storageAltSteps[<d,sp>]),
+endOf(storageAltSteps[<d,sp>]),
+d.quantity,
+sp.storageTankId>
+| d in Demands,sp in StorageProductions : presenceOf(storageAltSteps[<d,sp>])==true
+
+};
+
+
+
+
 //Post Processing
 
 
 //Output
-/*execute {
+execute {
+
+
+
   	writeln("Total Non-Delivery Cost    : ", TotalNonDeliveryCost);
   	writeln("Total Processing Cost      : ", TotalProcessingCost);
   	writeln("Total Setup Cost           : ", TotalSetupCost);
@@ -340,4 +415,4 @@ subject to {
 " which is consumed at time ", sta.endTime);	
 }		
   	}	   
-}*/
+}
