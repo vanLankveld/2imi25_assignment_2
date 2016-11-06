@@ -323,6 +323,14 @@ subject to {
 			lengthOf(storageAltSteps[<d, sp>]) >= su.setupTime
 		);
 	}
+	
+	
+	//symmetry constraint
+	forall(<d, s> in DemandSteps,<d, sp> in DemandStorages : s.stepId==sp.prodStepId)
+	  {
+	  
+	  	  startBeforeStart(demandStep[<d,s>],storageAltSteps[<d, sp>]); 
+	  }
 }
 
 //Post Processing
