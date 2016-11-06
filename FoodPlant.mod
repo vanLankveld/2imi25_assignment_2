@@ -232,9 +232,9 @@ execute {
   cp.param.Workers = 1
   cp.param.TimeLimit = Opl.card(Demands); 
   //cp.param.DefaultInferenceLevel = "Low"; 
-  //cp.param.DefaultInferenceLevel = "Basic"; 
+  cp.param.DefaultInferenceLevel = "Basic"; 
   //cp.param.DefaultInferenceLevel = "Medium"; 
-  cp.param.DefaultInferenceLevel = "Extended";
+  //cp.param.DefaultInferenceLevel = "Extended";
   cp.param.SearchType = "Restart";
   //cp.param.SearchType = "DepthFirst";
   //cp.param.SearchType = "MultiPoint";
@@ -273,9 +273,9 @@ subject to {
     	span(demand[d], all(<d,s> in DemandSteps) demandStep[<d,s>]);
     	
     //Redundant constraint 1 
-    //forall(ordered ds1,ds2 in DemandSteps : ds1.demand.demandId == ds2.demand.demandId) {
-    //	startOf(demandStep[ds2]) >= endOf(demandStep[ds1]);
-    //}
+    forall(ordered ds1,ds2 in DemandSteps : ds1.demand.demandId == ds2.demand.demandId) {
+    	startOf(demandStep[ds2]) >= endOf(demandStep[ds1]);
+    }
 	
 	//Demand step precedences
 	forall(<d,s1> in DemandSteps, <d,s2> in DemandSteps) {
