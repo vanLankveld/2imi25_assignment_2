@@ -97,7 +97,6 @@ tuple CriterionWeight {
 int lowestDeliveryMin = min(d in Demands) d.deliveryMin;
 int highestDeliveryMax = max(d in Demands) d.deliveryMax;
 
-//{Step} stepsForProduct[p in Products] = {s | s in Steps : s.productId == p.productId};
 
 //Decision variables
 dvar interval demand[d in Demands]
@@ -109,6 +108,17 @@ tuple DemandStep {
 	Demand demand;
 	Step step;
 }
+
+/*//Each demand and each step for a demand which is scheduled. Since not every demand has an equal number of steps, the interval is optional
+dvar interval demandStep[d in Demands][s in Steps]
+	optional
+	in lowestDeliveryMin..highestDeliveryMax
+	size(
+		min(a in Alternatives : a.stepId == s.stepId) (a.fixedProcessingTime + ftoi(round(d.quantity*a.variableProcessingTime)))
+		..
+		((max(sr in Setups : sr.toState == s.productId) sr.setupTime) + 
+			max(a in Alternatives : a.stepId == s.stepId) (a.fixedProcessingTime + ftoi(round(d.quantity*a.variableProcessingTime))))
+);*/
 
 {DemandStep} DemandSteps = {<d, s> | d in Demands, s in Steps : d.productId == s.productId};
 
@@ -198,8 +208,6 @@ dexpr float TotalProcessingCost = TotalFixedProcessingCost+TotalVariableProcessi
 dexpr float TotalNonDeliveryCost = 
 	sum(d in Demands) (1-presenceOf(demand[d]))*d.nonDeliveryVariableCost*d.quantity;
 	
-
-	
 pwlFunction tardiness[d in Demands] = 
 	piecewise{0->d.dueTime;d.tardinessVariableCost}(0,0);	
 	          				
@@ -241,6 +249,13 @@ subject to {
 		
 		(presenceOf(demand[d]) == presenceOf(demandStep[<d,s>]));
 	}
+	
+	/*
+	//No demand/step combination should be present when the step is not required for a demand
+	forall(d in Demands, s in Steps : d.productId != s.productId) {
+		!presenceOf(demandStep[d][s]);
+	}	
+	*/
 	
 	//No overlap between steps on a single resource
 	forall(r in Resources)
@@ -319,7 +334,6 @@ tuple DemandAssignment {
   float tardinessCost;
 };
 
-//{DemandAssignment} demandAssignments = fill in from your decision variables.
 {DemandAssignment} demandAssignments = {
 	<d.demandId, 
 	  startOf(demand[d]), 
@@ -353,9 +367,9 @@ tuple StepAssignment {
 	a.resourceId,
 	a.fixedProcessingTime + ftoi(round(d.quantity*a.variableProcessingTime)),
 	su.setupCost,
-	startOf(demand[d]),
-	 //endOf(demand[d1]),
 	startOf(demand[d])+su.setupTime,
+	 //endOf(demand[d1]),
+	startOf(demand[d]),
 	s.setupResourceId> 
 	
 	|<d,a> in DemandAlternatives, r in Resources, s in Steps, su in Setups : presenceOf(demandAlternative[<d,a>])==true&&
@@ -412,13 +426,13 @@ execute {
  		        ": [", sa.startTime, ",", sa.endTime, "] ", 
  		        "on ", sa.resourceId);
  		write("   processing cost: ", sa.procCost);
-// 		if (sa.setupCost > 0)
-// 		  write(", setup cost: ", sa.setupCost);
-// 		writeln();
-// 		if (sa.startTimeSetup < sa.endTimeSetup)
-// 			writeln("   setup step: [", 
-// 			        sa.startTimeSetup, ",", sa.endTimeSetup, "] ",
-// 			        "on ", sa.setupResourceId);   
+ 		if (sa.setupCost > 0)
+ 		  write(", setup cost: ", sa.setupCost);
+ 		writeln();
+ 		if (sa.startTimeSetup < sa.endTimeSetup)
+ 			writeln("   setup step: [", 
+ 			        sa.startTimeSetup, ",", sa.endTimeSetup, "] ",
+ 			        "on ", sa.setupResourceId);   
   	}
   	writeln();
   
