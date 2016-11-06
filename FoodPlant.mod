@@ -105,8 +105,15 @@ dvar interval demand[d in Demands]
 	in d.deliveryMin..d.deliveryMax
 	size(0..(d.deliveryMax-d.deliveryMin));
 
-//Each demand and each step for a demand which is scheduled. Since not every demand has an equal number of steps, the interval is optional
-dvar interval demandStep[d in Demands][s in Steps]
+tuple DemandStep {
+	Demand demand;
+	Step step;
+}
+
+{DemandStep} DemandSteps = {<d, s> | d in Demands, s in Steps : d.productId == s.productId};
+
+//Each demand and each step for a demand which is scheduled. Since not every demand needs to be scheduled, the interval is optional
+dvar interval demandStep[<d,s> in DemandSteps]
 	optional
 	in lowestDeliveryMin..highestDeliveryMax
 	size(
@@ -118,12 +125,12 @@ dvar interval demandStep[d in Demands][s in Steps]
 
 //Alternatives for each step scheduled in 
 tuple DemandAlternative{
-Demand d;
-Alternative a;
+	Demand d;
+	Alternative a;
 }
+
 {DemandAlternative} DemandAlternatives ={<d,a>|d in Demands, s in Steps, a in Alternatives : 
-			s.productId == d.productId && a.stepId == s.stepId};
-			
+			s.productId == d.productId && a.stepId == s.stepId};		
 			
 dvar interval demandAlternative[<d,a> in DemandAlternatives]
 	optional
@@ -203,10 +210,10 @@ dexpr float TotalTardinessCost =
 	sum(d in Demands) TardinessCost[d]; 
 	
 dexpr float TotalSetupCost = 
-	sum(d in Demands, a in Alternatives, r in Resources, s in Steps, su in Setups : 
+	sum(<d, s> in DemandSteps, a in Alternatives, r in Resources, su in Setups : 
 			a.resourceId == r.resourceId && a.stepId == s.stepId && r.setupMatrixId == su.setupMatrixId &&
 			su.fromState == r.initialProductId && su.toState == s.productId) 
-			presenceOf(demandStep[d][s]) * su.setupCost;
+			presenceOf(demandStep[<d,s>]) * su.setupCost;
 dexpr float WeightedNonDeliveryCost= max(c in CriterionWeights :c.criterionId == "NonDeliveryCost")(c.weight*TotalNonDeliveryCost);
 dexpr float WeightedProcessingCost=max(c in CriterionWeights :c.criterionId =="ProcessingCost")(c.weight*TotalProcessingCost);
 dexpr float WeightedSetupCost=max(c in CriterionWeights :c.criterionId =="SetupCost")(c.weight*TotalSetupCost);
@@ -232,12 +239,7 @@ subject to {
 		//Old version. Not correct since this still allows demandStep[x][y] to be present  even if demand[x] is absent
 		//(presenceOf(demand[d]) => presenceOf(demandStep[d][s]));
 		
-		(presenceOf(demand[d]) == presenceOf(demandStep[d][s]));
-	}
-	
-	//No demand/step combination should be present when the step is not required for a demand
-	forall(d in Demands, s in Steps : d.productId != s.productId) {
-		!presenceOf(demandStep[d][s]);
+		(presenceOf(demand[d]) == presenceOf(demandStep[<d,s>]));
 	}
 	
 	//No overlap between steps on a single resource
@@ -246,21 +248,21 @@ subject to {
 	
 	//Steps of a demand must be within the demand interval
 	forall(d in Demands)
-    	span(demand[d], all(s in Steps) demandStep[d][s]);
+    	span(demand[d], all(<d,s> in DemandSteps) demandStep[<d,s>]);
 	
 	//Demand step precedences
-	forall(d in Demands, s1 in Steps, s2 in Steps) {
+	forall(<d,s1> in DemandSteps, <d,s2> in DemandSteps) {
 		forall(p in Precedences : (p.predecessorId == s1.stepId) && (p.successorId == s2.stepId)) {
-			endBeforeStart(demandStep[d][s1], demandStep[d][s2], p.delayMin);
+			endBeforeStart(demandStep[<d,s1>], demandStep[<d,s2>], p.delayMin);
 			
 			//Maximal delay between steps
-			startOf(demandStep[d][s2])-endOf(demandStep[d][s1]) <= p.delayMax;
+			startOf(demandStep[<d,s2>])-endOf(demandStep[<d,s1>]) <= p.delayMax;
  		}			
 	}
 	
 	//Alternatives for a step
-	forall(d in Demands, s in Steps) {
-		alternative(demandStep[d][s], all(<d,alt> in DemandAlternatives: alt.stepId==s.stepId) demandAlternative[<d,alt>]);
+	forall(<d,s> in DemandSteps) {
+		alternative(demandStep[<d,s>], all(<d,alt> in DemandAlternatives: alt.stepId==s.stepId) demandAlternative[<d,alt>]);
 	}
 	
 	//Length of each alternative, including the setup time
@@ -284,12 +286,14 @@ subject to {
 	
 	forall(<d, ps1> in DemandProductions, <d, ps2> in DemandProductions, <d, sp> in DemandStorages : 
 			sp.prodStepId == ps1.stepId && sp.consStepId == ps2.stepId) {
-		(startOf(demandStep[d][ps2])-endOf(demandStep[d][ps1]) > 0)	== presenceOf(storageSteps[<d, ps1>]);		
+		(startOf(demandStep[<d,ps2>])-endOf(demandStep[<d,ps1>]) > 0)	== presenceOf(storageSteps[<d, ps1>]);		
 	}
 	
-	forall(pr in Precedences, <d, sp> in DemandStorages : pr.predecessorId == sp.prodStepId && pr.successorId == sp.consStepId) {
-		endAtStart(demandStep[d][<sp.prodStepId>], storageAltSteps[<d, sp>]) &&
-		startAtEnd(demandStep[d][<sp.consStepId>], storageAltSteps[<d, sp>]);
+	forall(<d, s1> in DemandSteps, <d, s2> in DemandSteps, pr in Precedences, <d, sp> in DemandStorages : 
+			s1.stepId == sp.prodStepId && s2.stepId == sp.consStepId &&
+			pr.predecessorId == sp.prodStepId && pr.successorId == sp.consStepId) {
+		endAtStart(demandStep[<d, s1>], storageAltSteps[<d, sp>]) &&
+		startAtEnd(demandStep[<d, s2>], storageAltSteps[<d, sp>]);
 	}
 	
 	//A storaretank cannot exceed maximum capacity
