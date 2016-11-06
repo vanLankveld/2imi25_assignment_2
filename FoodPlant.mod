@@ -258,7 +258,7 @@ subject to {
 	}
 	
 	/*
-	//No demand/step combination should be present when the step is not required for a demand
+	//No demand/step combination should be present when the step is not required for a demand (old constrint, not needer anymore)
 	forall(d in Demands, s in Steps : d.productId != s.productId) {
 		!presenceOf(demandStep[d][s]);
 	}	
@@ -336,13 +336,10 @@ subject to {
 		);
 	}
 	
-	
 	//symmetry constraint
-	forall(<d, s> in DemandSteps,<d, sp> in DemandStorages : s.stepId==sp.prodStepId)
-	  {
-	  
-	  	  startBeforeStart(demandStep[<d,s>],storageAltSteps[<d, sp>]); 
-	  }
+	/*forall(<d, s> in DemandSteps,<d, sp> in DemandStorages : s.stepId==sp.prodStepId) {
+		startBeforeStart(demandStep[<d,s>],storageAltSteps[<d, sp>]); 
+	}*/
 }
 
 //Post Processing
