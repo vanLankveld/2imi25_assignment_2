@@ -156,14 +156,7 @@ dvar sequence resources[r in Resources]
 	in all(d in Demands, s in Steps, a in Alternatives : 
 			s.productId == d.productId && a.stepId == s.stepId && a.resourceId == r.resourceId) demandAlternative[<d,a>];
 	
-tuple DemandProduction {
-	Demand d;
-	Step ps;
-}
-
-{DemandProduction} DemandProductions = {<d, ps> | d in Demands, ps in Steps : d.productId == ps.productId};
-	
-dvar interval storageSteps[<d, ps> in DemandProductions]
+dvar interval storageSteps[<d, ps> in DemandSteps]
 	optional
 	in 0..d.deliveryMax;
 	
@@ -232,8 +225,8 @@ execute {
   cp.param.Workers = 1
   cp.param.TimeLimit = Opl.card(Demands); 
   //cp.param.DefaultInferenceLevel = "Low"; 
-  cp.param.DefaultInferenceLevel = "Basic"; 
-  //cp.param.DefaultInferenceLevel = "Medium"; 
+  //cp.param.DefaultInferenceLevel = "Basic"; 
+  cp.param.DefaultInferenceLevel = "Medium"; 
   //cp.param.DefaultInferenceLevel = "Extended";
   cp.param.SearchType = "Restart";
   //cp.param.SearchType = "DepthFirst";
@@ -307,11 +300,11 @@ subject to {
 	}
 	
 	//A demandstep should use a single suitable storage tank
-	forall(<d, ps> in DemandProductions) {
+	forall(<d, ps> in DemandSteps) {
 		alternative(storageSteps[<d, ps>], all(sp in StorageProductions : sp.prodStepId == ps.stepId) storageAltSteps[<d, sp>]);
 	}
 	
-	forall(<d, ps1> in DemandProductions, <d, ps2> in DemandProductions, <d, sp> in DemandStorages : 
+	forall(<d, ps1> in DemandSteps, <d, ps2> in DemandSteps, <d, sp> in DemandStorages : 
 			sp.prodStepId == ps1.stepId && sp.consStepId == ps2.stepId) {
 		(startOf(demandStep[<d,ps2>])-endOf(demandStep[<d,ps1>]) > 0)	== presenceOf(storageSteps[<d, ps1>]);		
 	}
