@@ -133,7 +133,7 @@ dvar interval demandStep[<d,s> in DemandSteps]
 			max(a in Alternatives : a.stepId == s.stepId) (a.fixedProcessingTime + ftoi(round(d.quantity*a.variableProcessingTime))))
 	);
 
-//Alternatives for each step scheduled in 
+//Alternatives for each step scheduled in demandSteps
 tuple DemandAlternative{
 	Demand d;
 	Alternative a;
@@ -231,6 +231,13 @@ dexpr float WeightedTardinessCost=max(c in CriterionWeights :c.criterionId =="Ta
 execute {
   cp.param.Workers = 1
   cp.param.TimeLimit = Opl.card(Demands); 
+  //cp.param.DefaultInferenceLevel = "Low"; 
+  //cp.param.DefaultInferenceLevel = "Basic"; 
+  //cp.param.DefaultInferenceLevel = "Medium"; 
+  cp.param.DefaultInferenceLevel = "Extended";
+  cp.param.SearchType = "Restart";
+  //cp.param.SearchType = "DepthFirst";
+  //cp.param.SearchType = "MultiPoint";
 }
 
 //Objective
@@ -264,6 +271,11 @@ subject to {
 	//Steps of a demand must be within the demand interval
 	forall(d in Demands)
     	span(demand[d], all(<d,s> in DemandSteps) demandStep[<d,s>]);
+    	
+    //Redundant constraint 1 
+    //forall(ordered ds1,ds2 in DemandSteps : ds1.demand.demandId == ds2.demand.demandId) {
+    //	startOf(demandStep[ds2]) >= endOf(demandStep[ds1]);
+    //}
 	
 	//Demand step precedences
 	forall(<d,s1> in DemandSteps, <d,s2> in DemandSteps) {

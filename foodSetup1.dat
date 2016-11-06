@@ -1,0 +1,13 @@
+SheetConnection sheet("foodSetup1.xls");
+
+Products from SheetRead(sheet,"Products");
+Demands from SheetRead(sheet,"Demands");
+Resources from SheetRead(sheet,"Resources");
+SetupResources from SheetRead(sheet,"SetupResources");
+StorageTanks from SheetRead(sheet,"StorageTanks");
+Steps from SheetRead(sheet,"Steps");
+Precedences from SheetRead(sheet,"Precedences");
+Alternatives from SheetRead(sheet,"Alternatives");
+StorageProductions from SheetRead(sheet,"StorageProductions");
+Setups from SheetRead(sheet,"Setups");
+CriterionWeights from SheetRead(sheet,"CriterionWeights");
