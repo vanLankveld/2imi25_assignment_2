@@ -256,9 +256,9 @@ execute {
   cp.param.TimeLimit = Opl.card(Demands); 
   //cp.param.DefaultInferenceLevel = "Low"; 
   //cp.param.DefaultInferenceLevel = "Basic"; 
-  cp.param.DefaultInferenceLevel = "Medium"; 
+  //cp.param.DefaultInferenceLevel = "Medium"; 
   //cp.param.DefaultInferenceLevel = "Extended";
-  cp.param.SearchType = "Restart";
+  //cp.param.SearchType = "Restart";
   //cp.param.SearchType = "DepthFirst";
   //cp.param.SearchType = "MultiPoint";
 }
@@ -286,7 +286,7 @@ subject to {
 	}
 	
 	/*
-	//No demand/step combination should be present when the step is not required for a demand (old constrint, not needer anymore)
+	//No demand/step combination should be present when the step is not required for a demand (old constrint, not needed anymore)
 	forall(d in Demands, s in Steps : d.productId != s.productId) {
 		!presenceOf(demandStep[d][s]);
 	}	
@@ -376,8 +376,8 @@ tuple DemandAssignment {
 	<d.demandId, 
 	  startOf(demand[d]), 
 	  endOf(demand[d]), 
-	  d.nonDeliveryVariableCost,
-	  d.tardinessVariableCost> 
+	  d.nonDeliveryVariableCost*d.quantity * (1-presenceOf(demand[d])),
+	  endEval(demand[d], tardiness[d])> 
 	 | d in Demands
 };
 
@@ -450,6 +450,9 @@ execute {
   	writeln("Weighted Setup Cost        : ", WeightedSetupCost);
   	writeln("Weighted Tardiness Cost    : ", WeightedTardinessCost);
   	writeln();
+	writeln("Total Weighted Cost        : ", TotalWeightedCost);
+	writeln();
+  	
      
   	for(var d in demandAssignments) {
  		writeln(d.demandId, ": [", 
