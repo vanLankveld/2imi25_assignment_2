@@ -249,6 +249,7 @@ dexpr float WeightedNonDeliveryCost= max(c in CriterionWeights :c.criterionId ==
 dexpr float WeightedProcessingCost=max(c in CriterionWeights :c.criterionId =="ProcessingCost")(c.weight*TotalProcessingCost);
 dexpr float WeightedSetupCost=max(c in CriterionWeights :c.criterionId =="SetupCost")(c.weight*TotalSetupCost);
 dexpr float WeightedTardinessCost=max(c in CriterionWeights :c.criterionId =="TardinessCost")(c.weight*TotalTardinessCost);
+dexpr float TotalWeightedCost = WeightedNonDeliveryCost+WeightedProcessingCost+WeightedSetupCost+WeightedTardinessCost;
 
 //Environment settings
 execute {
@@ -265,10 +266,7 @@ execute {
 
 //Objective
 minimize 
-	WeightedNonDeliveryCost + 
-	WeightedProcessingCost +
-	WeightedSetupCost + 
-	WeightedTardinessCost;
+	TotalWeightedCost;
 	
 //Constraints
 subject to {
