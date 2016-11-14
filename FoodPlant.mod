@@ -2,6 +2,14 @@
 //Guus van Lankveld		0629468		g.v.lankveld@student.tue.nl
 //Xiayang Hao			0892474		x.hao@student.tue.nl
 
+/*REMOVE THIS BEFORE SUBMITTING TO TEACHER:
+
+- Say something about setup costs for storage tank not being used
+
+
+*/
+
+
 using CP;
 
 //Input data
