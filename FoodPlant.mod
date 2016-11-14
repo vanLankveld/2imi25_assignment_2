@@ -255,7 +255,7 @@ pwlFunction tardiness[d in Demands] =
 	piecewise{0->d.dueTime;d.tardinessVariableCost}(d.dueTime,0);	
 	          				
 dexpr float TardinessCost[d in Demands] =
-	presenceOf(demand[d])*endEval(demand[d], tardiness[d]);
+	presenceOf(demand[d])*endEval(demand[d], tardiness[d],0);
 	 
 dexpr float TotalTardinessCost = 
 	sum(d in Demands) TardinessCost[d]; 
@@ -273,10 +273,10 @@ setupCostArray[r]
                          -1)]
              [d.productId]; 
 
-dexpr float WeightedNonDeliveryCost= max(c in CriterionWeights :c.criterionId == "NonDeliveryCost")(c.weight*TotalNonDeliveryCost);
-dexpr float WeightedProcessingCost=max(c in CriterionWeights :c.criterionId =="ProcessingCost")(c.weight*TotalProcessingCost);
-dexpr float WeightedSetupCost=max(c in CriterionWeights :c.criterionId =="SetupCost")(c.weight*TotalSetupCost);
-dexpr float WeightedTardinessCost=max(c in CriterionWeights :c.criterionId =="TardinessCost")(c.weight*TotalTardinessCost);
+dexpr float WeightedNonDeliveryCost= item(CriterionWeights, ord(CriterionWeights, <"NonDeliveryCost">)).weight*TotalNonDeliveryCost;
+dexpr float WeightedProcessingCost=item(CriterionWeights, ord(CriterionWeights, <"ProcessingCost">)).weight*TotalProcessingCost;
+dexpr float WeightedSetupCost=item(CriterionWeights, ord(CriterionWeights, <"SetupCost">)).weight*TotalSetupCost;
+dexpr float WeightedTardinessCost=item(CriterionWeights, ord(CriterionWeights, <"TardinessCost">)).weight*TotalTardinessCost;
 dexpr float TotalWeightedCost = WeightedNonDeliveryCost+WeightedProcessingCost+WeightedSetupCost+WeightedTardinessCost;
 
 
@@ -362,12 +362,22 @@ subject to {
 	
 	forall(<d, ps1> in DemandSteps, <d, ps2> in DemandSteps, <d, sp> in DemandStorages : 
 			sp.prodStepId == ps1.stepId && sp.consStepId == ps2.stepId) {
+			
 		(startOf(demandStep[<d,ps2>])-endOf(demandStep[<d,ps1>]) > 0)	== presenceOf(storageSteps[<d, ps1>]);		
 	}
 	
-	forall(<d, s1> in DemandSteps, <d, s2> in DemandSteps, pr in Precedences, <d, sp> in DemandStorages : 
+//	forall(<d, s1> in DemandSteps, <d, s2> in DemandSteps, pr in Precedences, <d, sp> in DemandStorages : 
+//			s1.stepId == sp.prodStepId && s2.stepId == sp.consStepId &&
+//			pr.predecessorId == sp.prodStepId && pr.successorId == sp.consStepId) {
+//
+//		endAtStart(demandStep[<d, s1>], storageAltSteps[<d, sp>]) &&
+//		startAtEnd(demandStep[<d, s2>], storageAltSteps[<d, sp>]);
+//	}
+	
+		forall(<d, s1> in DemandSteps, <d, s2> in DemandSteps, pr in Precedences, <d, sp> in DemandStorages : 
 			s1.stepId == sp.prodStepId && s2.stepId == sp.consStepId &&
 			pr.predecessorId == sp.prodStepId && pr.successorId == sp.consStepId) {
+
 		endAtStart(demandStep[<d, s1>], storageAltSteps[<d, sp>]) &&
 		startAtEnd(demandStep[<d, s2>], storageAltSteps[<d, sp>]);
 	}
