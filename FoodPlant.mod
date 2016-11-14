@@ -213,9 +213,15 @@ tuple TransitionTime {
 };
 	
 dvar sequence resources[r in Resources] 
-	in all(d in Demands, s in Steps, a in Alternatives : 
-			s.productId == d.productId && a.stepId == s.stepId && a.resourceId == r.resourceId) demandAlternative[<d,a>] 
+	in all(<d,a> in DemandAlternatives : 
+			a.resourceId == r.resourceId) demandAlternative[<d,a>] 
 	types all(d in Demands) d.productId;
+	
+{TransitionTime} StorageTransitionTimes[r in StorageTanks] = {
+	<fromProduct, toProduct, setupTime> | 
+	<setupMatrixId, fromProduct, toProduct, setupTime, setupCost> in Setups : 
+	r.setupMatrixId == setupMatrixId
+};
 	
 dvar interval storageSteps[<d, ps> in DemandSteps]
 	optional
@@ -234,7 +240,15 @@ dvar interval storageAltSteps[<d,sp> in DemandStorages]
 optional
 in 0..d.deliveryMax;
 
-tuple DemandStorageProduct {
+dvar sequence storageTanks[r in StorageTanks] 
+	in all(<d,sp> in DemandStorages : 
+			sp.storageTankId == r.storageTankId) storageAltSteps[<d,sp>] 
+	types all(d in Demands) d.productId;
+
+statefunction tankState[r in StorageTanks] with StorageTransitionTimes[r];
+
+//Old code, used in the old storage setup constraint calculation
+/*tuple DemandStorageProduct {
 	DemandStorage ds;
 	Product fromProduct;
 	Product toProduct;
@@ -243,9 +257,9 @@ tuple DemandStorageProduct {
 {DemandStorageProduct} DemandStorageProducts = {
 	<<d, sp>, p1, p2> | <d, sp> in DemandStorages, p1 in Products, p2 in Products, s1 in Steps, s2 in Steps : 
 	sp.prodStepId == s1.stepId && sp.consStepId == s2.stepId && s1.productId == p1.productId && s2.productId == s2.productId
-};
+};*/
 
-cumulFunction storageTanks[r in StorageTanks] =
+cumulFunction storageTankUsage[r in StorageTanks] =
 (sum(<d,sp> in DemandStorages 
    : sp.storageTankId == r.storageTankId)
    pulse(storageAltSteps[<d,sp>], d.quantity));
@@ -333,7 +347,7 @@ subject to {
 	
 	//No overlap between steps on a single resource
 	forall(r in Resources)
-	  noOverlap(resources[r], ResourceTransitionTimes[r]);
+	  noOverlap(resources[r], ResourceTransitionTimes[r], 1);
 	
 	//Steps of a demand must be within the demand interval
 	forall(d in Demands)
@@ -373,9 +387,8 @@ subject to {
 	}
 	
 	forall(<d, ps1> in DemandSteps, <d, ps2> in DemandSteps, <d, sp> in DemandStorages : 
-			sp.prodStepId == ps1.stepId && sp.consStepId == ps2.stepId) {
-			
-		(startOf(demandStep[<d,ps2>])-endOf(demandStep[<d,ps1>]) > 0)	== presenceOf(storageSteps[<d, ps1>]);		
+		sp.prodStepId == ps1.stepId && sp.consStepId == ps2.stepId) {
+			(startOf(demandStep[<d,ps2>])-endOf(demandStep[<d,ps1>]) > 0) == presenceOf(storageSteps[<d, ps1>]);		
 	}
 	
 //	forall(<d, s1> in DemandSteps, <d, s2> in DemandSteps, pr in Precedences, <d, sp> in DemandStorages : 
@@ -389,23 +402,27 @@ subject to {
 		forall(<d, s1> in DemandSteps, <d, s2> in DemandSteps, pr in Precedences, <d, sp> in DemandStorages : 
 			s1.stepId == sp.prodStepId && s2.stepId == sp.consStepId &&
 			pr.predecessorId == sp.prodStepId && pr.successorId == sp.consStepId) {
-
-		endAtStart(demandStep[<d, s1>], storageAltSteps[<d, sp>]) &&
-		startAtEnd(demandStep[<d, s2>], storageAltSteps[<d, sp>]);
+				endAtStart(demandStep[<d, s1>], storageAltSteps[<d, sp>]) &&
+				startAtEnd(demandStep[<d, s2>], storageAltSteps[<d, sp>]);
 	}
 	
 	//A storaretank cannot exceed maximum capacity
 	forall(r in StorageTanks) {
-		storageTanks[r] <= r.quantityMax;
+		storageTankUsage[r] <= r.quantityMax;
 	}
 	
+	forall(s in StorageTanks)
+		forall(<d, sp> in DemandStorages : sp.storageTankId == s.storageTankId)
+			alwaysEqual(tankState[s], storageAltSteps[<d, sp>], d.productId);
+	
+	//Old (incorrect) constraint: setuptime was part of the storageStep
 	//Setuptime for storage tanks
-	forall(<<d, sp>, p1, p2> in DemandStorageProducts, r in StorageTanks, su in Setups : 
-			sp.storageTankId == r.storageTankId && su.fromState == p1.productId && su.toState == p2.productId) {
-		!presenceOf(storageAltSteps[<d, sp>]) || (
-			lengthOf(storageAltSteps[<d, sp>]) >= su.setupTime
-		);
-	}
+	//forall(<<d, sp>, p1, p2> in DemandStorageProducts, r in StorageTanks, su in Setups : 
+	//		sp.storageTankId == r.storageTankId && su.fromState == p1.productId && su.toState == p2.productId) {
+	//	!presenceOf(storageAltSteps[<d, sp>]) || (
+	//		lengthOf(storageAltSteps[<d, sp>]) >= su.setupTime
+	//	);
+	//}
 	
 	//symmetry constraint
 	/*forall(<d, s> in DemandSteps,<d, sp> in DemandStorages : s.stepId==sp.prodStepId) {
@@ -460,7 +477,7 @@ tuple StepAssignment {
 	startOf(demand[d]),
 	s.setupResourceId> 
 	
-	|<d,a> in DemandAlternatives, r in Resources, s in Steps, su in Setups : presenceOf(demandAlternative[<d,a>])==true&&
+	|<d,a> in DemandAlternatives, r in Resources, s in Steps, su in Setups : presenceOf(demandAlternative[<d,a>]) &&
 				a.resourceId == r.resourceId && a.stepId == s.stepId && r.setupMatrixId == su.setupMatrixId &&
 				su.fromState == r.initialProductId && su.toState == s.productId
 	//|<d,a> in DemandAlternatives,s in Steps//, r in Resources,set in Setups
