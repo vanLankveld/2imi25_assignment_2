@@ -200,6 +200,18 @@ dvar interval setups[<d,a> in DemandAlternatives]
 			s.stepId == a.stepId && r.resourceId == a.resourceId && su.toState == s.productId) su.setupTime)
 	);
 	
+tuple TransitionTime {
+	int fromProduct;
+	int toProduct;
+	int setupTime;
+}
+
+{TransitionTime} ResourceTransitionTimes[r in Resources] = {
+	<fromProduct, toProduct, setupTime> | 
+	<setupMatrixId, fromProduct, toProduct, setupTime, setupCost> in Setups : 
+	r.setupMatrixId == setupMatrixId
+};
+	
 dvar sequence resources[r in Resources] 
 	in all(d in Demands, s in Steps, a in Alternatives : 
 			s.productId == d.productId && a.stepId == s.stepId && a.resourceId == r.resourceId) demandAlternative[<d,a>] 
@@ -321,7 +333,7 @@ subject to {
 	
 	//No overlap between steps on a single resource
 	forall(r in Resources)
-	  noOverlap(resources[r]);
+	  noOverlap(resources[r], ResourceTransitionTimes[r]);
 	
 	//Steps of a demand must be within the demand interval
 	forall(d in Demands)
