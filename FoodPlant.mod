@@ -94,15 +94,16 @@ tuple CriterionWeight {
 {Setup} Setups = ...;
 {CriterionWeight} CriterionWeights = ...;
 
-int lowestDeliveryMin = min(d in Demands) d.deliveryMin;
-int highestDeliveryMax = max(d in Demands) d.deliveryMax;
+//Used in the old dvar demandStep[d in Demands][s in Steps]
+//int lowestDeliveryMin = min(d in Demands) d.deliveryMin; 
+//int highestDeliveryMax = max(d in Demands) d.deliveryMax;
 
 
 //Decision variables
 dvar interval demand[d in Demands]
 	optional
-	in d.deliveryMin..d.deliveryMax
-	size(0..(d.deliveryMax-d.deliveryMin));
+	in 0..d.deliveryMax
+	size(0..d.deliveryMax);
 
 tuple DemandStep {
 	Demand demand;
@@ -125,12 +126,11 @@ dvar interval demandStep[d in Demands][s in Steps]
 //Each demand and each step for a demand which is scheduled. Since not every demand needs to be scheduled, the interval is optional
 dvar interval demandStep[<d,s> in DemandSteps]
 	optional
-	in lowestDeliveryMin..highestDeliveryMax
+	in 0..d.deliveryMax
 	size(
 		min(a in Alternatives : a.stepId == s.stepId) (a.fixedProcessingTime + ftoi(round(d.quantity*a.variableProcessingTime)))
 		..
-		((max(sr in Setups : sr.toState == s.productId) sr.setupTime) + 
-			max(a in Alternatives : a.stepId == s.stepId) (a.fixedProcessingTime + ftoi(round(d.quantity*a.variableProcessingTime))))
+		(max(a in Alternatives : a.stepId == s.stepId) (a.fixedProcessingTime + ftoi(round(d.quantity*a.variableProcessingTime))))
 	);
 
 //Alternatives for each step scheduled in demandSteps
@@ -144,12 +144,44 @@ tuple DemandAlternative{
 			
 dvar interval demandAlternative[<d,a> in DemandAlternatives]
 	optional
-	in lowestDeliveryMin..highestDeliveryMax
+	in 0..d.deliveryMax
 	size (
-		(a.fixedProcessingTime+ftoi(round(a.variableProcessingTime*d.quantity)))
+		a.fixedProcessingTime+ftoi(round(a.variableProcessingTime*d.quantity))
+	);
+	
+{int} ProductIds = {p.productId | p in Products};
+
+int setupCostArray[Resources][ProductIds][ProductIds];
+execute {
+  for(var r in Resources) {
+    for(var s in Setups) {
+      setupCostArray[r][s.fromState][s.toState] = 
+        s.setupCost;
+    }				  
+  }
+} 
+
+tuple DemandAlternativeSetup {
+	DemandAlternative da;
+	Setup su;
+}
+	
+{DemandAlternativeSetup} DemandAlternativeSetups = { <<d, a>, su> |
+		<d,a> in DemandAlternatives, r in Resources, s in Steps, su in Setups : 
+		a.resourceId == r.resourceId && a.stepId == s.stepId && r.setupMatrixId == su.setupMatrixId &&
+		su.fromState == r.initialProductId && su.toState == s.productId && 
+		s.setupResourceId != "NULL" && r.setupMatrixId != "NULL"
+	};
+	
+dvar interval setups[<d,a> in DemandAlternatives]
+	optional
+	in 0..d.deliveryMax
+	size (
+		(min(su in Setups, r in Resources, s in Steps : 
+			s.stepId == a.stepId && r.resourceId == a.resourceId && su.toState == s.productId) su.setupTime)
 		..
-		((max(sr in Setups, s in Steps : sr.toState == s.productId && s.stepId == a.stepId) sr.setupTime)+
-			(a.fixedProcessingTime+ftoi(round(a.variableProcessingTime*d.quantity))))
+		(max(su in Setups, r in Resources, s in Steps : 
+			s.stepId == a.stepId && r.resourceId == a.resourceId && su.toState == s.productId) su.setupTime)
 	);
 	
 dvar sequence resources[r in Resources] 
@@ -157,14 +189,7 @@ dvar sequence resources[r in Resources]
 			s.productId == d.productId && a.stepId == s.stepId && a.resourceId == r.resourceId) demandAlternative[<d,a>] 
 	types all(d in Demands) d.productId;
 	
-tuple DemandProduction {
-	Demand d;
-	Step ps;
-}
-
-{DemandProduction} DemandProductions = {<d, ps> | d in Demands, ps in Steps : d.productId == ps.productId};
-	
-dvar interval storageSteps[<d, ps> in DemandProductions]
+dvar interval storageSteps[<d, ps> in DemandSteps]
 	optional
 	in 0..d.deliveryMax;
 	
@@ -219,21 +244,25 @@ dexpr float TardinessCost[d in Demands] =
 dexpr float TotalTardinessCost = 
 	sum(d in Demands) TardinessCost[d]; 
 	
-dexpr float TotalSetupCost = 
-	sum(<d, s> in DemandSteps, a in Alternatives, r in Resources, su in Setups : 
-			a.resourceId == r.resourceId && a.stepId == s.stepId && r.setupMatrixId == su.setupMatrixId &&
-			su.fromState == r.initialProductId && su.toState == s.productId) 
-			presenceOf(demandStep[<d,s>]) * su.setupCost;
-//dexpr int setupCostArray[r in Resources][typeOfPrev(resources[r], demandAlternative[<d,a> | d in demands],r.initialProductId,-1)][d.productId]=1111;
-//dexpr int TotalSetupCost=
-//sum(<d,a> in DemandAlternatives, r in Resources: a.resourceId == r.resourceId) 
-//setupCostArray[r][typeOfPrev(resources[r],demandAlternative[<d,a>],r.initialProductId,-1)][d.productId];
+//dexpr float TotalSetupCost = 
+//	sum(<<d,a>,su> in DemandAlternativeSetups) presenceOf(setups[<d,a>]) * su.setupCost;
+	
+	dexpr int TotalSetupCost = 
+sum(<d,a> in DemandAlternatives, r in Resources: a.resourceId == r.resourceId) 
+setupCostArray[r]
+             [typeOfPrev(resources[r],
+                         demandAlternative[<d,a>],
+                         r.initialProductId,
+                         -1)]
+             [d.productId]; 
 
 dexpr float WeightedNonDeliveryCost= max(c in CriterionWeights :c.criterionId == "NonDeliveryCost")(c.weight*TotalNonDeliveryCost);
 dexpr float WeightedProcessingCost=max(c in CriterionWeights :c.criterionId =="ProcessingCost")(c.weight*TotalProcessingCost);
 dexpr float WeightedSetupCost=max(c in CriterionWeights :c.criterionId =="SetupCost")(c.weight*TotalSetupCost);
 dexpr float WeightedTardinessCost=max(c in CriterionWeights :c.criterionId =="TardinessCost")(c.weight*TotalTardinessCost);
-dexpr float TotalWeightedCost=WeightedNonDeliveryCost+WeightedProcessingCost+WeightedSetupCost+WeightedTardinessCost;
+dexpr float TotalWeightedCost = WeightedNonDeliveryCost+WeightedProcessingCost+WeightedSetupCost+WeightedTardinessCost;
+
+
 //Environment settings
 execute {
   cp.param.Workers = 1
@@ -241,18 +270,15 @@ execute {
   //cp.param.DefaultInferenceLevel = "Low"; 
   //cp.param.DefaultInferenceLevel = "Basic"; 
   //cp.param.DefaultInferenceLevel = "Medium"; 
-  cp.param.DefaultInferenceLevel = "Extended";
-  cp.param.SearchType = "Restart";
+  //cp.param.DefaultInferenceLevel = "Extended";
+  //cp.param.SearchType = "Restart";
   //cp.param.SearchType = "DepthFirst";
   //cp.param.SearchType = "MultiPoint";
 }
 
 //Objective
 minimize 
-	WeightedNonDeliveryCost + 
-	WeightedProcessingCost +
-	WeightedSetupCost + 
-	WeightedTardinessCost;
+	TotalWeightedCost;
 	
 //Constraints
 subject to {
@@ -264,8 +290,13 @@ subject to {
 		(presenceOf(demand[d]) == presenceOf(demandStep[<d,s>]));
 	}
 	
+	//A demand cannot be finihed before its deliverymin time
+	forall(d in Demands) {
+		endOf(demand[d]) >= d.deliveryMin;	
+	}
+	
 	/*
-	//No demand/step combination should be present when the step is not required for a demand
+	//No demand/step combination should be present when the step is not required for a demand (old constrint, not needed anymore)
 	forall(d in Demands, s in Steps : d.productId != s.productId) {
 		!presenceOf(demandStep[d][s]);
 	}	
@@ -280,9 +311,9 @@ subject to {
     	span(demand[d], all(<d,s> in DemandSteps) demandStep[<d,s>]);
     	
     //Redundant constraint 1 
-    //forall(ordered ds1,ds2 in DemandSteps : ds1.demand.demandId == ds2.demand.demandId) {
-    //	startOf(demandStep[ds2]) >= endOf(demandStep[ds1]);
-    //}
+    forall(ordered ds1,ds2 in DemandSteps : ds1.demand.demandId == ds2.demand.demandId) {
+    	startOf(demandStep[ds2]) >= endOf(demandStep[ds1]);
+    }
 	
 	//Demand step precedences
 	forall(<d,s1> in DemandSteps, <d,s2> in DemandSteps) {
@@ -300,26 +331,19 @@ subject to {
 		alternative(demandStep[<d,s>], all(<d,alt> in DemandAlternatives: alt.stepId==s.stepId) demandAlternative[<d,alt>]);
 	}
 	
-	//Length of each alternative, including the setup time
-	forall(<d,a> in DemandAlternatives, r in Resources, s in Steps, su in Setups : 
-				a.resourceId == r.resourceId && a.stepId == s.stepId && r.setupMatrixId == su.setupMatrixId &&
-				su.fromState == r.initialProductId && su.toState == s.productId) {
-		//Alternative is either not present or has length of processingtime+setuptime
-		!presenceOf(demandAlternative[<d,a>]) || (
-			lengthOf(demandAlternative[<d,a>]) == (
-				a.fixedProcessingTime + ftoi(round(d.quantity*a.variableProcessingTime)) + (
-					((s.setupResourceId != "NULL") && (r.setupMatrixId != "NULL")) * (su.setupTime)
-				)
-			)
-		);
+	//Setuptime for step alternatives
+	forall(<<d,a>, su> in DemandAlternativeSetups) {
+			//a setup must be scheduled iff the subsequent stepalternative is scheduled
+			presenceOf(demandAlternative[<d,a>]) == presenceOf(setups[<d,a>]);
+			startAtEnd(demandAlternative[<d,a>], setups[<d,a>]);
 	}
 	
 	//A demandstep should use a single suitable storage tank
-	forall(<d, ps> in DemandProductions) {
+	forall(<d, ps> in DemandSteps) {
 		alternative(storageSteps[<d, ps>], all(sp in StorageProductions : sp.prodStepId == ps.stepId) storageAltSteps[<d, sp>]);
 	}
 	
-	forall(<d, ps1> in DemandProductions, <d, ps2> in DemandProductions, <d, sp> in DemandStorages : 
+	forall(<d, ps1> in DemandSteps, <d, ps2> in DemandSteps, <d, sp> in DemandStorages : 
 			sp.prodStepId == ps1.stepId && sp.consStepId == ps2.stepId) {
 		(startOf(demandStep[<d,ps2>])-endOf(demandStep[<d,ps1>]) > 0)	== presenceOf(storageSteps[<d, ps1>]);		
 	}
@@ -344,13 +368,10 @@ subject to {
 		);
 	}
 	
-	
 	//symmetry constraint
-	forall(<d, s> in DemandSteps,<d, sp> in DemandStorages : s.stepId==sp.prodStepId)
-	  {
-	  
-	  	  startBeforeStart(demandStep[<d,s>],storageAltSteps[<d, sp>]); 
-	  }
+	/*forall(<d, s> in DemandSteps,<d, sp> in DemandStorages : s.stepId==sp.prodStepId) {
+		startBeforeStart(demandStep[<d,s>],storageAltSteps[<d, sp>]); 
+	}*/
 }
 
 //Post Processing
@@ -366,8 +387,8 @@ tuple DemandAssignment {
 	<d.demandId, 
 	  startOf(demand[d]), 
 	  endOf(demand[d]), 
-	  d.nonDeliveryVariableCost,
-	  d.tardinessVariableCost> 
+	  d.nonDeliveryVariableCost*d.quantity * (1-presenceOf(demand[d])),
+	  endEval(demand[d], tardiness[d])> 
 	 | d in Demands
 };
 
@@ -442,6 +463,9 @@ execute {
   	writeln();
      writeln();
      writeln("Total Weighted Cost        : ", TotalWeightedCost);
+
+  	
+     
   	for(var d in demandAssignments) {
  		writeln(d.demandId, ": [", 
  		        d.startTime, ",", d.endTime, "] ");
