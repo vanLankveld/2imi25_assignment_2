@@ -154,7 +154,8 @@ dvar interval demandAlternative[<d,a> in DemandAlternatives]
 	
 dvar sequence resources[r in Resources] 
 	in all(d in Demands, s in Steps, a in Alternatives : 
-			s.productId == d.productId && a.stepId == s.stepId && a.resourceId == r.resourceId) demandAlternative[<d,a>];
+			s.productId == d.productId && a.stepId == s.stepId && a.resourceId == r.resourceId) demandAlternative[<d,a>] 
+	types all(d in Demands) d.productId;
 	
 tuple DemandProduction {
 	Demand d;
@@ -197,13 +198,14 @@ cumulFunction storageTanks[r in StorageTanks] =
    pulse(storageAltSteps[<d,sp>], d.quantity));
 		
 //Expressions
-dexpr int TotalFixedProcessingCost = 
-	sum(<d,a> in DemandAlternatives) presenceOf(demandAlternative[<d,a>])*a.fixedProcessingCost;
+//dexpr int TotalFixedProcessingCost = 
+//	sum(<d,a> in DemandAlternatives) presenceOf(demandAlternative[<d,a>])*a.fixedProcessingCost;
+//
+//dexpr float TotalVariableProcessingCost = 
+//	sum(<d,a> in DemandAlternatives) presenceOf(demandAlternative[<d,a>])*a.variableProcessingCost*d.quantity;
 
-dexpr float TotalVariableProcessingCost = 
-	sum(<d,a> in DemandAlternatives) presenceOf(demandAlternative[<d,a>])*a.variableProcessingCost*d.quantity;
-
-dexpr float TotalProcessingCost = TotalFixedProcessingCost+TotalVariableProcessingCost;
+dexpr float TotalProcessingCost = sum(<d,a> in DemandAlternatives) presenceOf(demandAlternative[<d,a>])*a.fixedProcessingCost
++sum(<d,a> in DemandAlternatives) presenceOf(demandAlternative[<d,a>])*a.variableProcessingCost*d.quantity;
 
 dexpr float TotalNonDeliveryCost = 
 	sum(d in Demands) (1-presenceOf(demand[d]))*d.nonDeliveryVariableCost*d.quantity;
@@ -222,11 +224,16 @@ dexpr float TotalSetupCost =
 			a.resourceId == r.resourceId && a.stepId == s.stepId && r.setupMatrixId == su.setupMatrixId &&
 			su.fromState == r.initialProductId && su.toState == s.productId) 
 			presenceOf(demandStep[<d,s>]) * su.setupCost;
+//dexpr int setupCostArray[r in Resources][typeOfPrev(resources[r], demandAlternative[<d,a> | d in demands],r.initialProductId,-1)][d.productId]=1111;
+//dexpr int TotalSetupCost=
+//sum(<d,a> in DemandAlternatives, r in Resources: a.resourceId == r.resourceId) 
+//setupCostArray[r][typeOfPrev(resources[r],demandAlternative[<d,a>],r.initialProductId,-1)][d.productId];
+
 dexpr float WeightedNonDeliveryCost= max(c in CriterionWeights :c.criterionId == "NonDeliveryCost")(c.weight*TotalNonDeliveryCost);
 dexpr float WeightedProcessingCost=max(c in CriterionWeights :c.criterionId =="ProcessingCost")(c.weight*TotalProcessingCost);
 dexpr float WeightedSetupCost=max(c in CriterionWeights :c.criterionId =="SetupCost")(c.weight*TotalSetupCost);
 dexpr float WeightedTardinessCost=max(c in CriterionWeights :c.criterionId =="TardinessCost")(c.weight*TotalTardinessCost);
-
+dexpr float TotalWeightedCost=WeightedNonDeliveryCost+WeightedProcessingCost+WeightedSetupCost+WeightedTardinessCost;
 //Environment settings
 execute {
   cp.param.Workers = 1
@@ -279,11 +286,12 @@ subject to {
 	
 	//Demand step precedences
 	forall(<d,s1> in DemandSteps, <d,s2> in DemandSteps) {
-		forall(p in Precedences : (p.predecessorId == s1.stepId) && (p.successorId == s2.stepId)) {
-			endBeforeStart(demandStep[<d,s1>], demandStep[<d,s2>], p.delayMin);
+		forall(p in Precedences : (p.predecessorId == s1.stepId) && (p.successorId == s2.stepId)&&(p.delayMin<p.delayMax)) {
+			endBeforeStart(demandStep[<d,s1>], demandStep[<d,s2>], maxl(p.delayMin,0));
 			
 			//Maximal delay between steps
-			startOf(demandStep[<d,s2>])-endOf(demandStep[<d,s1>]) <= p.delayMax;
+			//startOf(demandStep[<d,s2>])-endOf(demandStep[<d,s1>]) <= p.delayMax;
+			startBeforeEnd(demandStep[<d,s2>],demandStep[<d,s1>],-p.delayMax);
  		}			
 	}
 	
@@ -432,7 +440,8 @@ execute {
   	writeln("Weighted Setup Cost        : ", WeightedSetupCost);
   	writeln("Weighted Tardiness Cost    : ", WeightedTardinessCost);
   	writeln();
-     
+     writeln();
+     writeln("Total Weighted Cost        : ", TotalWeightedCost);
   	for(var d in demandAssignments) {
  		writeln(d.demandId, ": [", 
  		        d.startTime, ",", d.endTime, "] ");
