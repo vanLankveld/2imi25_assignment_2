@@ -351,7 +351,7 @@ subject to {
 	//Setuptime for step alternatives
 	forall(<<d,a>, su> in DemandAlternativeSetups) {
 			//a setup must be scheduled iff the subsequent stepalternative is scheduled
-			presenceOf(demandAlternative[<d,a>]) == presenceOf(setups[<d,a>]);
+			presenceOf(demandAlternative[<d,a>]) == presenceOf(setups[<d,a>]) == (lengthOf(setups[<d,a>]) == su.setupTime);
 			startAtEnd(demandAlternative[<d,a>], setups[<d,a>]);
 	}
 	
