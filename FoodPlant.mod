@@ -29,6 +29,7 @@ tuple Demand {
 	float tardinessVariableCost;
 }
 
+
 tuple Resource {
 	key string resourceId;
 	int resourceNr;
@@ -159,15 +160,22 @@ dvar interval demandAlternative[<d,a> in DemandAlternatives]
 	
 {int} ProductIds = {p.productId | p in Products};
 
-int setupCostArray[Resources][ProductIds][ProductIds];
-execute {
-  for(var r in Resources) {
-    for(var s in Setups) {
-      setupCostArray[r][s.fromState][s.toState] = 
-        s.setupCost;
-    }				  
-  }
-} 
+//int setupCostArray[Resources][ProductIds][ProductIds];
+//execute {
+//  for(var r in Resources) {
+//    for(var s in Setups) {
+//      setupCostArray[r][s.fromState][s.toState] = 
+//        s.setupCost;
+//    }				  
+//  }
+//} 
+
+int setupCostArray[r in Resources][p1 in ProductIds union {- 1}][p2 in ProductIds] = 
+	sum( < setupMatrixId, fromState, toState, setupTime,
+   		setupCost > in Setups :
+   		setupMatrixId == r.setupMatrixId && fromState == p1 && toState == p2 
+   	) setupCost;
+	
 
 tuple DemandAlternativeSetup {
 	DemandAlternative da;
@@ -244,7 +252,7 @@ dexpr float TotalNonDeliveryCost =
 	sum(d in Demands) (1-presenceOf(demand[d]))*d.nonDeliveryVariableCost*d.quantity;
 	
 pwlFunction tardiness[d in Demands] = 
-	piecewise{0->d.dueTime;d.tardinessVariableCost}(0,0);	
+	piecewise{0->d.dueTime;d.tardinessVariableCost}(d.dueTime,0);	
 	          				
 dexpr float TardinessCost[d in Demands] =
 	endEval(demand[d], tardiness[d]);
@@ -254,7 +262,8 @@ dexpr float TotalTardinessCost =
 	
 //dexpr float TotalSetupCost = 
 //	sum(<<d,a>,su> in DemandAlternativeSetups) presenceOf(setups[<d,a>]) * su.setupCost;
-	
+
+
 	dexpr int TotalSetupCost = 
 sum(<d,a> in DemandAlternatives, r in Resources: a.resourceId == r.resourceId) 
 setupCostArray[r]
