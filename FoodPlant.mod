@@ -171,11 +171,7 @@ dvar interval demandAlternative[<d,a> in DemandAlternatives]
 //} 
 
 int setupCostArray[r in Resources][p1 in ProductIds union {- 1}][p2 in ProductIds] = 
-	sum( < setupMatrixId, fromState, toState, setupTime,
-   		setupCost > in Setups :
-   		setupMatrixId == r.setupMatrixId && fromState == p1 && toState == p2 
-   	) setupCost;
-	
+	sum( <r.setupMatrixId, p1, p2, setupTime, setupCost > in Setups) setupCost;
 
 tuple DemandAlternativeSetup {
 	DemandAlternative da;
@@ -237,8 +233,8 @@ tuple DemandStorage {
        : sp.prodStepId == st.stepId && st.productId == d.productId};
 
 dvar interval storageAltSteps[<d,sp> in DemandStorages]
-optional
-in 0..d.deliveryMax;
+	optional
+	in 0..d.deliveryMax;
 
 dvar sequence storageTanks[r in StorageTanks] 
 	in all(<d,sp> in DemandStorages : 
@@ -246,6 +242,22 @@ dvar sequence storageTanks[r in StorageTanks]
 	types all(d in Demands) d.productId;
 
 statefunction tankState[r in StorageTanks] with StorageTransitionTimes[r];
+
+tuple DemandStorageTank {
+	DemandStorage demandStorage;
+	StorageTank tank;
+}
+
+{DemandStorageTank} DemandStorageTanks = {
+	<<d, sp>, r> | <d, sp> in DemandStorages, r in StorageTanks : sp.storageTankId == r.storageTankId 
+};
+
+dexpr int storageTypeOfPrev[<<d, sp>, r> in DemandStorageTanks] =
+	typeOfPrev(
+		storageTanks[r],
+		storageAltSteps[<d,sp>],
+		r.initialProductId
+	);
 
 //Old code, used in the old storage setup constraint calculation
 /*tuple DemandStorageProduct {
@@ -289,12 +301,16 @@ dexpr float TotalTardinessCost =
 //dexpr float TotalSetupCost = 
 //	sum(<<d,a>,su> in DemandAlternativeSetups) presenceOf(setups[<d,a>]) * su.setupCost;
 
+dexpr int SetupCost[<d,a> in DemandAlternatives][r in Resources] = 
+	setupCostArray[r]
+         [typeOfPrev(resources[r], demandAlternative[<d,a>], r.initialProductId, -1)]
+		 [d.productId]; 
 
 dexpr int TotalSetupCost = 
 	sum(<d,a> in DemandAlternatives, r in Resources: a.resourceId == r.resourceId) 
 	setupCostArray[r]
          [typeOfPrev(resources[r], demandAlternative[<d,a>], r.initialProductId, -1)]
-         [d.productId]; 
+		 [d.productId]; 
 
 dexpr float WeightedNonDeliveryCost= item(CriterionWeights, ord(CriterionWeights, <"NonDeliveryCost">)).weight*TotalNonDeliveryCost;
 dexpr float WeightedProcessingCost=item(CriterionWeights, ord(CriterionWeights, <"ProcessingCost">)).weight*TotalProcessingCost;
@@ -408,9 +424,13 @@ subject to {
 		storageTankUsage[r] <= r.quantityMax;
 	}
 	
-	forall(s in StorageTanks)
-		forall(<d, sp> in DemandStorages : sp.storageTankId == s.storageTankId)
-			alwaysEqual(tankState[s], storageAltSteps[<d, sp>], d.productId);
+	forall(r in StorageTanks)
+		forall(<d, sp> in DemandStorages : sp.storageTankId == r.storageTankId)
+			alwaysEqual(tankState[r], storageAltSteps[<d, sp>], d.productId);
+	
+	forall(r in StorageTanks) {
+		noOverlap(storageTanks[r], StorageTransitionTimes[r], 1);	
+	}
 	
 	//Old (incorrect) constraint: setuptime was part of the storageStep
 	//Setuptime for storage tanks
@@ -446,17 +466,16 @@ tuple DemandAssignment {
 };
 
 tuple StepAssignment {
-  key string demandId; 
-  key string stepId;  	
-  int startTime;    	
-  int endTime;
-  string resourceId;
-  float procCost;
-  float setupCost;
-   int endTimeSetup;
-  int startTimeSetup;
- 
- string setupResourceId;
+  	key string demandId; 
+  	key string stepId;  	
+  	int startTime;    	
+  	int endTime;
+  	string resourceId;
+	float procCost;
+  	float setupCost;
+  	int endTimeSetup;
+  	int startTimeSetup;
+	string setupResourceId;
 };
 
 
@@ -468,20 +487,18 @@ tuple StepAssignment {
 	endOf(demandAlternative[<d,a>]),
 	a.resourceId,
 	a.fixedProcessingTime + ftoi(round(d.quantity*a.variableProcessingTime)),
-	su.setupCost,
-	startOf(demand[d])+su.setupTime,
-	 //endOf(demand[d1]),
-	startOf(demand[d]),
+	SetupCost[<d,a>][r],
+	startOf(setups[<d,a>]),
+	endOf(setups[<d,a>]),
 	s.setupResourceId> 
 	
-	|<d,a> in DemandAlternatives, r in Resources, s in Steps, su in Setups : presenceOf(demandAlternative[<d,a>]) &&
-				a.resourceId == r.resourceId && a.stepId == s.stepId && r.setupMatrixId == su.setupMatrixId &&
-				su.fromState == r.initialProductId && su.toState == s.productId
+	| <d,a> in DemandAlternatives, r in Resources, s in Steps, su in Setups : presenceOf(demandAlternative[<d,a>]) &&
+				a.resourceId == r.resourceId && a.stepId == s.stepId
 	//|<d,a> in DemandAlternatives,s in Steps//, r in Resources,set in Setups
 	//:presenceOf(demandAlternative[<d,a>])==true&&s.productId == d.productId && a.stepId == s.stepId
 	//&&a.resourceId==r.resourceId&&r.setupMatrixId==set.setupMatrixId&& d.productId==set.toState
-
 };
+
 tuple StorageAssignment {
   key string demandId; 
   key string prodStepId;  	
@@ -514,11 +531,9 @@ execute {
   	writeln("Weighted Setup Cost        : ", WeightedSetupCost);
   	writeln("Weighted Tardiness Cost    : ", WeightedTardinessCost);
   	writeln();
-     writeln();
-     writeln("Total Weighted Cost        : ", TotalWeightedCost);
-
+    writeln("Total Weighted Cost        : ", TotalWeightedCost);
+	writeln();
   	
-     
   	for(var d in demandAssignments) {
  		writeln(d.demandId, ": [", 
  		        d.startTime, ",", d.endTime, "] ");
