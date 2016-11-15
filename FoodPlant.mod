@@ -301,7 +301,8 @@ pwlFunction tardiness[d in Demands] =
 	piecewise{0->d.dueTime;d.tardinessVariableCost}(d.dueTime,0);	
 	          				
 dexpr float TardinessCost[d in Demands] =
-	presenceOf(demand[d])*endEval(demand[d], tardiness[d],0);
+	//presenceOf(demand[d])*
+	endEval(demand[d], tardiness[d],0);
 	 
 dexpr float TotalTardinessCost = 
 	sum(d in Demands) TardinessCost[d]; 
