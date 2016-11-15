@@ -259,11 +259,20 @@ dvar sequence storageTanks[r in StorageTanks]
 
 statefunction tankState[r in StorageTanks] with StorageTransitionTimes[r];
 
+dexpr int resourceTypeOfPrev[<d,a> in DemandAlternatives] =
+	typeOfPrev(
+		resources[item(Resources, <a.resourceId>)], 
+		demandAlternative[<d,a>], 
+		item(Resources, <a.resourceId>).initialProductId,
+		-1
+	);
+
 dexpr int storageTypeOfPrev[<d, sp> in DemandStorages] =
 	typeOfPrev(
 		storageTanks[item(StorageTanks, <sp.storageTankId>)],
 		storageAltSteps[<d,sp>],
-		item (StorageTanks, <sp.storageTankId>).initialProductId 
+		item (StorageTanks, <sp.storageTankId>).initialProductId,
+		-1
 	);
 
 //Old code, used in the old storage setup constraint calculation
@@ -309,13 +318,13 @@ dexpr float TotalTardinessCost =
 //Used by post-processing
 dexpr int SetupCost[<d,a> in DemandAlternatives][r in Resources] = 
 	setupCostArray[r]
-         [typeOfPrev(resources[r], demandAlternative[<d,a>], r.initialProductId, -1)]
+         [resourceTypeOfPrev[<d,a>]]
 		 [d.productId]; 
 
 dexpr int TotalSetupCost = 
 	sum(<d,a> in DemandAlternatives, r in Resources: a.resourceId == r.resourceId) 
 	setupCostArray[r]
-         [typeOfPrev(resources[r], demandAlternative[<d,a>], r.initialProductId, -1)]
+         [resourceTypeOfPrev[<d,a>]]
 		 [d.productId]; 
 
 dexpr float WeightedNonDeliveryCost= item(CriterionWeights, ord(CriterionWeights, <"NonDeliveryCost">)).weight*TotalNonDeliveryCost;
@@ -385,10 +394,13 @@ subject to {
 	}
 	
 	//Setuptime for step alternatives
-	forall(<<d,a>, su> in DemandAlternativeSetups) {
-			//a setup must be scheduled iff the subsequent stepalternative is scheduled
-			presenceOf(demandAlternative[<d,a>]) == presenceOf(setups[<d,a>]);
-			startAtEnd(demandAlternative[<d,a>], setups[<d,a>]);
+	forall(<da, r> in DemandAlternativeResources) {
+		//a setup must be scheduled iff the subsequent stepalternative is scheduled
+		(
+			presenceOf(demandAlternative[da]) && 
+			typeOfPrev(resources[r], demandAlternative[da], r.initialProductId, -1) != da.d.productId
+		) == presenceOf(setups[da]);
+		startAtEnd(demandAlternative[da], setups[da]);
 	}
 	
 	//A demandstep should use a single suitable storage tank
