@@ -310,7 +310,7 @@ pwlFunction tardiness[d in Demands] =
 	piecewise{0->d.dueTime;d.tardinessVariableCost}(d.dueTime,0);	
 	          				
 dexpr float TardinessCost[d in Demands] =
-	//presenceOf(demand[d])*
+	presenceOf(demand[d])*
 	endEval(demand[d], tardiness[d],0);
 	 
 dexpr float TotalTardinessCost = 
@@ -496,7 +496,8 @@ tuple StepAssignment {
 	startOf(demandAlternative[<d,a>]),
 	endOf(demandAlternative[<d,a>]),
 	a.resourceId,
-	a.fixedProcessingTime + ftoi(round(d.quantity*a.variableProcessingTime)),
+		 a.fixedProcessingCost
+	+ a.variableProcessingCost*d.quantity,
 	SetupCost[<d,a>][r],
 	startOf(setups[<d,a>]),
 	endOf(setups[<d,a>]),
