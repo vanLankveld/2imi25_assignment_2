@@ -290,14 +290,11 @@ dexpr float TotalTardinessCost =
 //	sum(<<d,a>,su> in DemandAlternativeSetups) presenceOf(setups[<d,a>]) * su.setupCost;
 
 
-	dexpr int TotalSetupCost = 
-sum(<d,a> in DemandAlternatives, r in Resources: a.resourceId == r.resourceId) 
-setupCostArray[r]
-             [typeOfPrev(resources[r],
-                         demandAlternative[<d,a>],
-                         r.initialProductId,
-                         -1)]
-             [d.productId]; 
+dexpr int TotalSetupCost = 
+	sum(<d,a> in DemandAlternatives, r in Resources: a.resourceId == r.resourceId) 
+	setupCostArray[r]
+         [typeOfPrev(resources[r], demandAlternative[<d,a>], r.initialProductId, -1)]
+         [d.productId]; 
 
 dexpr float WeightedNonDeliveryCost= item(CriterionWeights, ord(CriterionWeights, <"NonDeliveryCost">)).weight*TotalNonDeliveryCost;
 dexpr float WeightedProcessingCost=item(CriterionWeights, ord(CriterionWeights, <"ProcessingCost">)).weight*TotalProcessingCost;
