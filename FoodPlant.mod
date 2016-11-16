@@ -5,7 +5,7 @@
 /*REMOVE THIS BEFORE SUBMITTING TO TEACHER:
 
 - Say something about setup costs for storage tank not being used
-
+- Explain implications in report when they are used.
 
 */
 
@@ -389,6 +389,12 @@ subject to {
  		}			
 	}
 	
+	//A demand cannot be scheduled if delayMin is higher than delayMax 
+	forall(<d,s> in DemandSteps, pr in Precedences : 
+			pr.predecessorId == s.stepId || pr.successorId == s.stepId) {
+		pr.delayMin > pr.delayMax => !presenceOf(demand[d]);
+	}
+	
 	//Alternatives for a step
 	forall(<d,s> in DemandSteps) {
 		alternative(demandStep[<d,s>], all(<d,alt> in DemandAlternatives: alt.stepId==s.stepId) demandAlternative[<d,alt>]);
@@ -409,6 +415,7 @@ subject to {
 		alternative(storageSteps[<d, ps>], all(sp in StorageProductions : sp.prodStepId == ps.stepId) storageAltSteps[<d, sp>]);
 	}
 	
+	//Storage must be present when there is any time interval between two consecutive demand steps
 	forall(<d, ps1> in DemandSteps, <d, ps2> in DemandSteps, <d, sp> in DemandStorages : 
 		sp.prodStepId == ps1.stepId && sp.consStepId == ps2.stepId) {
 			(startOf(demandStep[<d,ps2>])-endOf(demandStep[<d,ps1>]) > 0) == presenceOf(storageSteps[<d, ps1>]);		
