@@ -6,6 +6,7 @@
 
 - Say something about setup costs for storage tank not being used
 - Explain implications in report when they are used.
+- Run mutipul time for a good solution
 
 */
 
@@ -396,7 +397,9 @@ subject to {
 	//Storage must be present when there is any time interval between two consecutive demand steps
 	forall(<d, ps1> in DemandSteps, <d, ps2> in DemandSteps, <d, sp> in DemandStorages : 
 		sp.prodStepId == ps1.stepId && sp.consStepId == ps2.stepId) {
-			(startOf(demandStep[<d,ps2>])-endOf(demandStep[<d,ps1>]) > 0) => presenceOf(storageSteps[<d, ps1>]);		
+			//worse performance
+			//(startOf(demandStep[<d,ps2>])-endOf(demandStep[<d,ps1>]) > 0) => presenceOf(storageSteps[<d, ps1>]);				
+			(startOf(demandStep[<d,ps2>])-endOf(demandStep[<d,ps1>]) > 0) == presenceOf(storageSteps[<d, ps1>]);		
 	}
 	
 //	forall(<d, s1> in DemandSteps, <d, s2> in DemandSteps, pr in Precedences, <d, sp> in DemandStorages : 
