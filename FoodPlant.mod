@@ -269,9 +269,14 @@ cumulFunction storageTankUsage[r in StorageTanks] =
 //dexpr float TotalVariableProcessingCost = 
 //	sum(<d,a> in DemandAlternatives) presenceOf(demandAlternative[<d,a>])*a.variableProcessingCost*d.quantity;
 
+//should be the same but get worse result
+//dexpr float TotalProcessingCost = 
+//	sum(<d,a> in DemandAlternatives) presenceOf(demandAlternative[<d,a>])*(a.fixedProcessingCost
+//	+a.variableProcessingCost*d.quantity);
+
 dexpr float TotalProcessingCost = 
-	sum(<d,a> in DemandAlternatives) presenceOf(demandAlternative[<d,a>])*(a.fixedProcessingCost
-	+a.variableProcessingCost*d.quantity);
+	sum(<d,a> in DemandAlternatives) presenceOf(demandAlternative[<d,a>])*a.fixedProcessingCost
+	+sum(<d,a> in DemandAlternatives) presenceOf(demandAlternative[<d,a>])*a.variableProcessingCost*d.quantity;
 
 dexpr float TotalNonDeliveryCost = 
 	sum(d in Demands) (1-presenceOf(demand[d]))*d.nonDeliveryVariableCost*d.quantity;
