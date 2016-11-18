@@ -172,18 +172,9 @@ dvar interval demandAlternative[<d,a> in DemandAlternatives]
 
 int setupCostArray[r in Resources][p1 in ProductIds union {- 1}][p2 in ProductIds] = 
 	sum( <r.setupMatrixId, p1, p2, setupTime, setupCost > in Setups) setupCost;
-
-tuple DemandAlternativeSetup {
-	DemandAlternative da;
-	Setup su;
-}
 	
-{DemandAlternativeSetup} DemandAlternativeSetups = { <<d, a>, su> |
-		<d,a> in DemandAlternatives, r in Resources, s in Steps, su in Setups : 
-		a.resourceId == r.resourceId && a.stepId == s.stepId && r.setupMatrixId == su.setupMatrixId &&
-		su.fromState == r.initialProductId && su.toState == s.productId && 
-		s.setupResourceId != "NULL" && r.setupMatrixId != "NULL"
-	};
+int setupTimeArray[r in Resources][p1 in ProductIds union {- 1}][p2 in ProductIds] = 
+	sum( <r.setupMatrixId, p1, p2, setupTime, setupCost > in Setups) setupTime;
 	
 dvar interval setups[<d,a> in DemandAlternatives]
 	optional
@@ -244,19 +235,6 @@ dvar interval storageAltSteps[<d,sp> in DemandStorages]
 	optional
 	in 0..d.deliveryMax;
 
-tuple DemandStorageTank {
-	DemandStorage demandStorage;
-	StorageTank tank;
-}
-
-{DemandStorageTank} DemandStorageTanks = {
-	<<d,sp>, r> | <d,sp> in DemandStorages, r in StorageTanks : sp.storageTankId == r.storageTankId
-};
-
-dvar sequence storageTanks[r in StorageTanks] 
-	in all(<<d,sp>, r> in DemandStorageTanks) storageAltSteps[<d,sp>] 
-	types all(<<d,sp>, r> in DemandStorageTanks) d.productId;
-
 statefunction tankState[r in StorageTanks] with StorageTransitionTimes[r];
 
 dexpr int resourceTypeOfPrev[<d,a> in DemandAlternatives] =
@@ -264,14 +242,6 @@ dexpr int resourceTypeOfPrev[<d,a> in DemandAlternatives] =
 		resources[item(Resources, <a.resourceId>)], 
 		demandAlternative[<d,a>], 
 		item(Resources, <a.resourceId>).initialProductId,
-		-1
-	);
-
-dexpr int storageTypeOfPrev[<d, sp> in DemandStorages] =
-	typeOfPrev(
-		storageTanks[item(StorageTanks, <sp.storageTankId>)],
-		storageAltSteps[<d,sp>],
-		item (StorageTanks, <sp.storageTankId>).initialProductId,
 		-1
 	);
 
@@ -300,8 +270,8 @@ cumulFunction storageTankUsage[r in StorageTanks] =
 //	sum(<d,a> in DemandAlternatives) presenceOf(demandAlternative[<d,a>])*a.variableProcessingCost*d.quantity;
 
 dexpr float TotalProcessingCost = 
-	sum(<d,a> in DemandAlternatives) presenceOf(demandAlternative[<d,a>])*a.fixedProcessingCost
-	+sum(<d,a> in DemandAlternatives) presenceOf(demandAlternative[<d,a>])*a.variableProcessingCost*d.quantity;
+	sum(<d,a> in DemandAlternatives) presenceOf(demandAlternative[<d,a>])*(a.fixedProcessingCost
+	+a.variableProcessingCost*d.quantity);
 
 dexpr float TotalNonDeliveryCost = 
 	sum(d in Demands) (1-presenceOf(demand[d]))*d.nonDeliveryVariableCost*d.quantity;
@@ -311,7 +281,7 @@ pwlFunction tardiness[d in Demands] =
 	          				
 dexpr float TardinessCost[d in Demands] =
 	presenceOf(demand[d])*
-	endEval(demand[d], tardiness[d],0);
+	endEval(demand[d], tardiness[d]);
 	 
 dexpr float TotalTardinessCost = 
 	sum(d in Demands) TardinessCost[d]; 
@@ -339,6 +309,7 @@ dexpr float TotalWeightedCost = WeightedNonDeliveryCost+WeightedProcessingCost+W
 execute {
   cp.param.Workers = 1
   cp.param.TimeLimit = Opl.card(Demands); 
+  
   //cp.param.DefaultInferenceLevel = "Low"; 
   //cp.param.DefaultInferenceLevel = "Basic"; 
   //cp.param.DefaultInferenceLevel = "Medium"; 
@@ -391,23 +362,25 @@ subject to {
 	
 	//A demand cannot be scheduled if delayMin is higher than delayMax 
 	forall(<d,s> in DemandSteps, pr in Precedences : 
-			pr.predecessorId == s.stepId || pr.successorId == s.stepId) {
-		pr.delayMin > pr.delayMax => !presenceOf(demand[d]);
+			pr.delayMin > pr.delayMax && 
+			(pr.predecessorId == s.stepId || pr.successorId == s.stepId)) {
+		!presenceOf(demand[d]);
 	}
 	
 	//Alternatives for a step
 	forall(<d,s> in DemandSteps) {
 		alternative(demandStep[<d,s>], all(<d,alt> in DemandAlternatives: alt.stepId==s.stepId) demandAlternative[<d,alt>]);
 	}
-	
+		
 	//Setuptime for step alternatives
-	forall(<da, r> in DemandAlternativeResources) {
+	forall(<da, r> in DemandAlternativeResources, s in Steps, su in Setups : 
+			da.a.stepId == s.stepId && s.setupResourceId != "NULL" && su.setupMatrixId == r.setupMatrixId) {
 		//a setup must be scheduled iff the subsequent stepalternative is scheduled
-		(
-			presenceOf(demandAlternative[da]) && 
-			typeOfPrev(resources[r], demandAlternative[da], r.initialProductId, -1) != da.d.productId
-		) == presenceOf(setups[da]);
+		presenceOf(demandAlternative[da]) == presenceOf(setups[da]);
 		startAtEnd(demandAlternative[da], setups[da]);
+		lengthOf(setups[da]) == setupTimeArray[r]
+											  [typeOfPrev(resources[r], demandAlternative[da], r.initialProductId, -1)]
+											  [s.productId];
 	}
 	
 	//A demandstep should use a single suitable storage tank
@@ -418,7 +391,7 @@ subject to {
 	//Storage must be present when there is any time interval between two consecutive demand steps
 	forall(<d, ps1> in DemandSteps, <d, ps2> in DemandSteps, <d, sp> in DemandStorages : 
 		sp.prodStepId == ps1.stepId && sp.consStepId == ps2.stepId) {
-			(startOf(demandStep[<d,ps2>])-endOf(demandStep[<d,ps1>]) > 0) == presenceOf(storageSteps[<d, ps1>]);		
+			(startOf(demandStep[<d,ps2>])-endOf(demandStep[<d,ps1>]) > 0) => presenceOf(storageSteps[<d, ps1>]);		
 	}
 	
 //	forall(<d, s1> in DemandSteps, <d, s2> in DemandSteps, pr in Precedences, <d, sp> in DemandStorages : 
@@ -441,13 +414,10 @@ subject to {
 		storageTankUsage[r] <= r.quantityMax;
 	}
 	
+	//Storage tank can only hold one type of product simultaneously
 	forall(r in StorageTanks)
 		forall(<d, sp> in DemandStorages : sp.storageTankId == r.storageTankId)
 			alwaysEqual(tankState[r], storageAltSteps[<d, sp>], d.productId);
-	
-	forall(r in StorageTanks) {
-		noOverlap(storageTanks[r], StorageTransitionTimes[r], 1);	
-	}
 	
 	//Old (incorrect) constraint: setuptime was part of the storageStep
 	//Setuptime for storage tanks
@@ -503,11 +473,15 @@ tuple StepAssignment {
 	startOf(demandAlternative[<d,a>]),
 	endOf(demandAlternative[<d,a>]),
 	a.resourceId,
+//<<<<<<< HEAD
 		 a.fixedProcessingCost
 	+ a.variableProcessingCost*d.quantity,
+//=======
+//	a.fixedProcessingCost + ftoi(round(d.quantity*a.variableProcessingCost)),
+//>>>>>>> 378baf2579184433c759fef35c066424b1abb4cd
 	SetupCost[<d,a>][r],
-	startOf(setups[<d,a>]),
 	endOf(setups[<d,a>]),
+	startOf(setups[<d,a>]),
 	s.setupResourceId> 
 	
 	| <d,a> in DemandAlternatives, r in Resources, s in Steps, su in Setups : presenceOf(demandAlternative[<d,a>]) &&
