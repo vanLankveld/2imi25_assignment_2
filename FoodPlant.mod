@@ -463,7 +463,7 @@ subject to {
 			alwaysEqual(tankState[r], storageAltSteps[<d, sp>], d.productId);
 }
 
-//Post Processing
+//================================ Post Processing ================================
 tuple DemandAssignment {
   key string demandId; 
   int startTime;    	
@@ -534,7 +534,7 @@ tuple StorageAssignment {
 	<d,sp> in DemandStorages : presenceOf(storageAltSteps[<d,sp>])==true
 };
 
-//Output
+//================================ Output ================================
 execute {
   	writeln("Total Non-Delivery Cost    : ", TotalNonDeliveryCost);
   	writeln("Total Processing Cost      : ", TotalProcessingCost);
