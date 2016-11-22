@@ -350,15 +350,10 @@ subject to {
 	forall(d in Demands)
     	span(demand[d], all(<d,s> in DemandSteps) demandStep[<d,s>]);
     	
-    //Old redundant constraint
+    //Old 'redundant' constraint
     /*forall(ordered ds1,ds2 in DemandSteps : ds1.demand.demandId == ds2.demand.demandId) {
     	startOf(demandStep[ds2]) >= endOf(demandStep[ds1]);
-	}*/
-    	
-    //Redundant constraint
-    /*forall(ordered ds1,ds2 in DemandSteps, <ds1.step.stepId, ds2.step.stepId, dmin, dmax> in Precedences) {
-    	startOf(demandStep[ds2]) > startOf(demandStep[ds1]);
-    }*/
+	}*/ 
 	
 	//Demand step precedences
 	forall(<d,s1> in DemandSteps, <d,s2> in DemandSteps) {
@@ -398,6 +393,11 @@ subject to {
 	//A demandstep should use a single suitable storage tank
 	forall(<d, ps> in DemandSteps) {
 		alternative(storageSteps[<d, ps>], all(sp in StorageProductions : sp.prodStepId == ps.stepId) storageAltSteps[<d, sp>]);
+	}
+	
+	//If a demand is not delivered, no storage should be used for that demand
+	forall(<d, ps> in DemandSteps) {
+		!presenceOf(demand[d]) => !presenceOf(storageSteps[<d, ps>]);	
 	}
 	
 	//Storage must be present when there is any time interval between two consecutive demand steps
