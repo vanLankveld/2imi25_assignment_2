@@ -395,10 +395,10 @@ subject to {
 		alternative(storageSteps[<d, ps>], all(sp in StorageProductions : sp.prodStepId == ps.stepId) storageAltSteps[<d, sp>]);
 	}
 	
-	//If a demand is not delivered, no storage should be used for that demand
-	forall(<d, ps> in DemandSteps) {
+	//Redundant constraint: If a demand is not delivered, no storage should be used for that demand
+	/*forall(<d, ps> in DemandSteps) {
 		!presenceOf(demand[d]) => !presenceOf(storageSteps[<d, ps>]);	
-	}
+	}*/
 	
 	//Storage must be present when there is any time interval between two consecutive demand steps
 	forall(<d, ps1> in DemandSteps, <d, ps2> in DemandSteps, <d, sp> in DemandStorages : 
