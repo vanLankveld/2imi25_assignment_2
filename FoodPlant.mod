@@ -8,6 +8,9 @@
 - Explain implications in report when they are used.
 - Run mutipul time for a good solution
 
+- Searchphases
+	- instance0: Setting searchphases decreases performance
+
 */
 
 
