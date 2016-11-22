@@ -6,6 +6,7 @@
 
 - Say something about setup costs for storage tank not being used
 - Explain implications in report when they are used.
+- Run mutipul time for a good solution
 
 */
 
@@ -269,6 +270,11 @@ cumulFunction storageTankUsage[r in StorageTanks] =
 //dexpr float TotalVariableProcessingCost = 
 //	sum(<d,a> in DemandAlternatives) presenceOf(demandAlternative[<d,a>])*a.variableProcessingCost*d.quantity;
 
+//should be the same but get worse result
+//dexpr float TotalProcessingCost = 
+//	sum(<d,a> in DemandAlternatives) presenceOf(demandAlternative[<d,a>])*(a.fixedProcessingCost
+//	+a.variableProcessingCost*d.quantity);
+
 dexpr float TotalProcessingCost = 
 	sum(<d,a> in DemandAlternatives) presenceOf(demandAlternative[<d,a>])*a.fixedProcessingCost
 	+sum(<d,a> in DemandAlternatives) presenceOf(demandAlternative[<d,a>])*a.variableProcessingCost*d.quantity;
@@ -281,7 +287,7 @@ pwlFunction tardiness[d in Demands] =
 	          				
 dexpr float TardinessCost[d in Demands] =
 	presenceOf(demand[d])*
-	endEval(demand[d], tardiness[d],0);
+	endEval(demand[d], tardiness[d]);
 	 
 dexpr float TotalTardinessCost = 
 	sum(d in Demands) TardinessCost[d]; 
@@ -397,6 +403,8 @@ subject to {
 	//Storage must be present when there is any time interval between two consecutive demand steps
 	forall(<d, ps1> in DemandSteps, <d, ps2> in DemandSteps, <d, sp> in DemandStorages : 
 		sp.prodStepId == ps1.stepId && sp.consStepId == ps2.stepId) {
+			//worse performance
+			//(startOf(demandStep[<d,ps2>])-endOf(demandStep[<d,ps1>]) > 0) => presenceOf(storageSteps[<d, ps1>]);				
 			(startOf(demandStep[<d,ps2>])-endOf(demandStep[<d,ps1>]) > 0) == presenceOf(storageSteps[<d, ps1>]);		
 	}
 	
@@ -479,7 +487,12 @@ tuple StepAssignment {
 	startOf(demandAlternative[<d,a>]),
 	endOf(demandAlternative[<d,a>]),
 	a.resourceId,
-	a.fixedProcessingCost + ftoi(round(d.quantity*a.variableProcessingCost)),
+//<<<<<<< HEAD
+		 a.fixedProcessingCost
+	+ a.variableProcessingCost*d.quantity,
+//=======
+//	a.fixedProcessingCost + ftoi(round(d.quantity*a.variableProcessingCost)),
+//>>>>>>> 378baf2579184433c759fef35c066424b1abb4cd
 	SetupCost[<d,a>][r],
 	endOf(setups[<d,a>]),
 	startOf(setups[<d,a>]),
