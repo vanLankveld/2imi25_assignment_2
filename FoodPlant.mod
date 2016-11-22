@@ -344,10 +344,15 @@ subject to {
 	forall(d in Demands)
     	span(demand[d], all(<d,s> in DemandSteps) demandStep[<d,s>]);
     	
-    //Redundant constraint 1 
-    forall(ordered ds1,ds2 in DemandSteps : ds1.demand.demandId == ds2.demand.demandId) {
+    //Old redundant constraint
+    /*forall(ordered ds1,ds2 in DemandSteps : ds1.demand.demandId == ds2.demand.demandId) {
     	startOf(demandStep[ds2]) >= endOf(demandStep[ds1]);
-    }
+	}*/
+    	
+    //Redundant constraint
+    /*forall(ordered ds1,ds2 in DemandSteps, <ds1.step.stepId, ds2.step.stepId, dmin, dmax> in Precedences) {
+    	startOf(demandStep[ds2]) > startOf(demandStep[ds1]);
+    }*/
 	
 	//Demand step precedences
 	forall(<d,s1> in DemandSteps, <d,s2> in DemandSteps) {
@@ -369,7 +374,8 @@ subject to {
 	
 	//Alternatives for a step
 	forall(<d,s> in DemandSteps) {
-		alternative(demandStep[<d,s>], all(<d,alt> in DemandAlternatives: alt.stepId==s.stepId) demandAlternative[<d,alt>]);
+		alternative(demandStep[<d,s>], all(<d,alt> in DemandAlternatives : alt.stepId==s.stepId) 
+			demandAlternative[<d,alt>]);
 	}
 		
 	//Setuptime for step alternatives
@@ -391,7 +397,7 @@ subject to {
 	//Storage must be present when there is any time interval between two consecutive demand steps
 	forall(<d, ps1> in DemandSteps, <d, ps2> in DemandSteps, <d, sp> in DemandStorages : 
 		sp.prodStepId == ps1.stepId && sp.consStepId == ps2.stepId) {
-			(startOf(demandStep[<d,ps2>])-endOf(demandStep[<d,ps1>]) > 0) => presenceOf(storageSteps[<d, ps1>]);		
+			(startOf(demandStep[<d,ps2>])-endOf(demandStep[<d,ps1>]) > 0) == presenceOf(storageSteps[<d, ps1>]);		
 	}
 	
 //	forall(<d, s1> in DemandSteps, <d, s2> in DemandSteps, pr in Precedences, <d, sp> in DemandStorages : 
@@ -428,7 +434,7 @@ subject to {
 	//	);
 	//}
 	
-	//symmetry constraint
+	//Old symmetry constraint
 	/*forall(<d, s> in DemandSteps,<d, sp> in DemandStorages : s.stepId==sp.prodStepId) {
 		startBeforeStart(demandStep[<d,s>],storageAltSteps[<d, sp>]); 
 	}*/
