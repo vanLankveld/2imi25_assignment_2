@@ -355,6 +355,8 @@ minimize
 
 subject to {
 	
+	//====================== demands ================
+	
 	//All steps for a demand should be present when the demand itself is present
 	forall(d in Demands, s in Steps : d.productId == s.productId) {
 		(presenceOf(demand[d]) == presenceOf(demandStep[<d,s>]));
@@ -365,9 +367,13 @@ subject to {
 		endOf(demand[d]) >= d.deliveryMin;	
 	}
 	
+	//====================== resources ================
+	
 	//No overlap between steps on a single resource
 	forall(r in Resources)
 	  noOverlap(resources[r], ResourceTransitionTimes[r], 1);
+	
+	//====================== production steps ================
 	
 	//Steps of a demand must be within the demand interval
 	forall(d in Demands)
@@ -391,6 +397,8 @@ subject to {
 			!presenceOf(demand[d]);
 	}
 	
+	//====================== production step alternatives ================
+	
 	//Alternatives for a step
 	forall(<d,s> in DemandSteps) {
 		alternative(demandStep[<d,s>], all(<d,alt> in DemandAlternatives : alt.stepId==s.stepId) 
@@ -409,6 +417,8 @@ subject to {
 											  [s.productId];
 	}
 	
+	//====================== storage tanks ================
+	
 	//A demandstep should use a single suitable storage tank
 	forall(<d, ps> in DemandSteps) {
 		alternative(storageSteps[<d, ps>], all(sp in StorageProductions : sp.prodStepId == ps.stepId) storageAltSteps[<d, sp>]);
@@ -416,15 +426,16 @@ subject to {
 
 	//Redundant constraint 1: If a demand is not delivered, no storage should be used for that demand
 	//Implication is used here since the reverse does not need top hold (absence of storage step does not imply absence of demand)
-	forall(<d, ps> in DemandSteps) {
+	/*forall(<d, ps> in DemandSteps) {
 		!presenceOf(demand[d]) => !presenceOf(storageSteps[<d, ps>]);	
-	}
+	}*/
 	
 	//Redundant constraint 2: If there is a minimum delay greater than zero between two production steps, 
 	//storage should be used between those two steps
 	/*forall(<d,s1> in DemandSteps, <d,s2> in DemandSteps, 
 		<s1.stepId, s2.stepId, delayMin, delayMax> in Precedences : delayMin > 0) {
-			presenceOf(storageSteps[<d, s1>]);
+			(presenceOf(demandStep[<d,s1>]) && presenceOf(demandStep[<d,s2>])) 
+			=> presenceOf(storageSteps[<d, s1>]);
 	}*/
 	
 	//Storage must be present when there is any time interval between two consecutive demand steps
