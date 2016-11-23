@@ -10,6 +10,7 @@
 - Explain implications in report when they are used.
 - Run mutipul time for a good solution
 - (startOf(demandStep[<d,ps2>])-endOf(demandStep[<d,ps1>]) > 0) == presenceOf(storageSteps[<d, ps1>]); == VS =>
+- On some (slower) laptops we tested on, redundant constraint 1 decreased the performance
 
 - Searchphases
 	- instance0: Setting searchphases decreases performance
@@ -326,9 +327,6 @@ execute {
   //cp.param.DefaultInferenceLevel = "Basic"; 
   //cp.param.DefaultInferenceLevel = "Medium"; 
   //cp.param.DefaultInferenceLevel = "Extended";
-  //cp.param.SearchType = "Restart";
-  //cp.param.SearchType = "DepthFirst";
-  //cp.param.SearchType = "MultiPoint";
 
   //cp.param.searchType = "DepthFirst";
   //cp.param.searchType = "Restart";
@@ -340,13 +338,13 @@ execute {
   //cp.param.restartfaillimit = 200;
   
   //Search phases, see the report for the other combinations which were used to test
-  /*
+  /*var f = cp.factory;
   cp.setSearchPhases(
    	f.searchPhase(resources),
-   	f.searchPhase(demandAlternative),
-   	f.searchPhase(storageAltSteps)
-  );
-  */
+   	f.searchPhase(storageAltSteps),
+   	f.searchPhase(setups)
+  );*/
+  
 }
 
 //Objective
@@ -415,13 +413,14 @@ subject to {
 	forall(<d, ps> in DemandSteps) {
 		alternative(storageSteps[<d, ps>], all(sp in StorageProductions : sp.prodStepId == ps.stepId) storageAltSteps[<d, sp>]);
 	}
-	
-	//Redundant constraint: If a demand is not delivered, no storage should be used for that demand
-	/*forall(<d, ps> in DemandSteps) {
+
+	//Redundant constraint 1: If a demand is not delivered, no storage should be used for that demand
+	//Implication is used here since the reverse does not need top hold (absence of storage step does not imply absence of demand)
+	forall(<d, ps> in DemandSteps) {
 		!presenceOf(demand[d]) => !presenceOf(storageSteps[<d, ps>]);	
-	}*/
+	}
 	
-	//Redundant constraint: If there is a minimum delay greater than zero between two production steps, 
+	//Redundant constraint 2: If there is a minimum delay greater than zero between two production steps, 
 	//storage should be used between those two steps
 	/*forall(<d,s1> in DemandSteps, <d,s2> in DemandSteps, 
 		<s1.stepId, s2.stepId, delayMin, delayMax> in Precedences : delayMin > 0) {
